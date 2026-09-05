@@ -148,9 +148,12 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             if own_venue_form is not None and opponent_venue_form is not None:
                 venue_form_diff = own_venue_form - opponent_venue_form
 
-        goals = sum(e.goals for e in player.matchdays if e.played)
-        assists = sum(e.assists for e in player.matchdays if e.played)
-        clean_sheets = sum(1 for e in player.matchdays if e.played and e.clean_sheet)
+        # Season totals, sourced directly from the player-detail endpoint --
+        # confirmed live that per-matchday performance entries carry no
+        # goal/assist/clean-sheet breakdown, only the running points total.
+        goals = player.season_goals
+        assists = player.season_assists
+        clean_sheets = player.season_clean_sheets
 
         remaining_difficulty = None
         if own_team_id:

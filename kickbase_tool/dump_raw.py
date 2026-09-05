@@ -14,7 +14,8 @@ from pathlib import Path
 from kickbase_tool.api import endpoints
 from kickbase_tool.api.client import KickbaseClient
 from kickbase_tool.config import authenticate, load_settings
-from kickbase_tool.data.normalize import extract_player_list
+from kickbase_tool.data.normalize import extract_player_list, extract_table_list
+from kickbase_tool.util import pick
 
 
 def main(argv=None) -> int:
@@ -43,32 +44,49 @@ def main(argv=None) -> int:
 
         market = client.get(endpoints.LEAGUE_MARKET.format(league_id=settings.league_id))
         dump("league_market", market)
+
+        ranking = client.get(endpoints.LEAGUE_RANKING.format(league_id=settings.league_id))
+        dump("league_ranking", ranking)
     else:
         print("KICKBASE_LEAGUE_ID nicht gesetzt -- ueberspringe eigener Kader/Markt (nicht fuer die Kern-Datenbank noetig).")
 
-    players = client.get(endpoints.COMPETITION_PLAYERS.format(competition_id=settings.competition_id))
-    dump("competition_players", players)
-
-    player_list = extract_player_list(players)
-    if player_list:
-        first_id = player_list[0].get("id") or player_list[0].get("i")
-        if first_id is not None:
-            perf = client.get(
-                endpoints.COMPETITION_PLAYER_PERFORMANCE.format(
-                    competition_id=settings.competition_id, player_id=first_id
-                )
-            )
-            dump(f"player_performance_{first_id}", perf)
-
     table = client.get(endpoints.COMPETITION_TABLE.format(competition_id=settings.competition_id))
     dump("competition_table", table)
+    table_list = extract_table_list(table)
 
     matchdays = client.get(endpoints.COMPETITION_MATCHDAYS.format(competition_id=settings.competition_id))
     dump("competition_matchdays", matchdays)
 
-    if settings.league_id:
-        ranking = client.get(endpoints.LEAGUE_RANKING.format(league_id=settings.league_id))
-        dump("league_ranking", ranking)
+    # COMPETITION_PLAYERS is scoped to the current matchday's two teams only
+    # (confirmed live) -- dumped here for reference, but the full player pool
+    # comes from COMPETITION_TEAM_PROFILE per team instead.
+    players = client.get(endpoints.COMPETITION_PLAYERS.format(competition_id=settings.competition_id))
+    dump("competition_players_CURRENT_MATCHDAY_ONLY", players)
+
+    if table_list:
+        first_team_id = pick(table_list[0], "tid", "id")
+        roster = client.get(
+            endpoints.COMPETITION_TEAM_PROFILE.format(competition_id=settings.competition_id, team_id=first_team_id)
+        )
+        dump(f"team_roster_{first_team_id}", roster)
+
+        roster_players = extract_player_list(roster)
+        if roster_players:
+            first_player_id = pick(roster_players[0], "i", "id", "pi")
+            if first_player_id is not None:
+                detail = client.get(
+                    endpoints.COMPETITION_PLAYER_DETAIL.format(
+                        competition_id=settings.competition_id, player_id=first_player_id
+                    )
+                )
+                dump(f"player_detail_{first_player_id}", detail)
+
+                perf = client.get(
+                    endpoints.COMPETITION_PLAYER_PERFORMANCE.format(
+                        competition_id=settings.competition_id, player_id=first_player_id
+                    )
+                )
+                dump(f"player_performance_{first_player_id}", perf)
 
     print(f"\nFertig. Rohdaten liegen unter {out_dir}/ -- damit lassen sich die Feldnamen in "
           f"kickbase_tool/data/normalize.py bei Bedarf praezisieren.")

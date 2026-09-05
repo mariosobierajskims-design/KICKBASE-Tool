@@ -118,96 +118,102 @@ mit Tests in [`tests/test_fallback.py`](tests/test_fallback.py):
 | 3 von 5 | die letzten **4** tatsächlich bestrittenen Spiele (auch wenn dafür weiter zurückgegangen wird) |
 | 0-2 von 5 | die letzten **5** tatsächlich bestrittenen Spiele (unabhängig davon wie weit das zurückliegt) |
 
-## Annahmen (bitte gegen deine echten Daten prüfen)
+## Live-Stand der Feldnamen
 
 Die öffentliche, inoffizielle Kickbase-v4-Doku
 ([kevinskyba/kickbase-api-doc](https://github.com/kevinskyba/kickbase-api-doc),
 [simonsagstetter/kickbase-api-v4-docs](https://github.com/simonsagstetter/kickbase-api-v4-docs))
-listet alle verwendeten Endpunkt-Pfade zuverlässig, liefert aber **fast keine
-Beispiel-Response-Bodies** — insbesondere keine für POST/PUT/DELETE und kaum
-welche für GET. Dieses Sandbox-Netzwerk konnte zudem `api.kickbase.com` nicht
-erreichen (vom Egress-Proxy geblockt), es gab hier also keine Möglichkeit,
-live gegen die echte API zu testen. Nach eurer Vorgabe ("Hauptsache du ziehst
-dir die korrekten Daten, ich muss dir manuell nichts liefern") ist das Tool
-deshalb so gebaut, dass es **selbst robust gegen unbekannte Feldnamen** ist,
-statt dich um Beispieldaten zu bitten:
+listet alle Endpunkt-Pfade zuverlässig, liefert aber kaum Beispiel-Response-
+Bodies. Die tatsächlichen Feldnamen in `kickbase_tool/data/normalize.py` sind
+deshalb **live gegen die echte API verifiziert** (per `dump_raw.py`, siehe
+unten), nicht nur geraten. Wichtigste bestätigte Erkenntnisse:
 
-- **`kickbase_tool/util.py:pick()`** sucht für jeden Wert mehrere plausible
-  Feldnamen-Varianten ab (z.B. `marketValue`, `mv`, `market_value`), statt
-  einen einzigen hart zu erwarten.
-- **Login** (`kickbase_tool/api/client.py`): sendet `{"em": ..., "pass": ...}`
-  gemäß dokumentiertem Beispiel-Request; liest ein Token aus mehreren
-  Kandidaten-Feldern, **und** verlässt sich zusätzlich auf das automatische
-  Cookie-Handling von `requests.Session` (die API setzt laut Doku ein
-  `kkstrauth`-Cookie) als Fallback, falls die App primär cookie-basiert
-  authentifiziert.
-- **Verletzt/Gesperrt-Status** (Kennzahl 14): Das Status-Enum stammt aus einer
-  älteren (v3) Community-Reverse-Engineering-Quelle (0=fit, 1=verletzt,
-  2=angeschlagen, 4=Reha, 8=Rote Karte, 16=Gelb-Rot, 32=5. Gelbe, 64=nicht im
-  Kader, 128=nicht in Liga, 256=abwesend). Für v4 unverifiziert. Aktuell gilt:
-  **jeder Status ≠ 0 (fit) führt zum Ausschluss** aus allen drei Rankings
-  (`Player.is_unavailable` in `kickbase_tool/data/models.py`) — wie von dir
-  vorgegeben ("Lass die verhinderten Spieler raus"). Falls die echten
-  Statuscodes abweichen, reicht eine Anpassung von `STATUS_LABELS` /
-  `STATUS_NONE` in dieser einen Datei.
-- **Team-Punkte pro Spieltag** (Kennzahl 8, 9, 11): Es gibt keinen
-  dokumentierten Endpoint dafür. Wie abgestimmt werden sie aus der Summe der
-  tatsächlichen Kickbase-Punkte aller Spieler eines Teams an einem Spieltag
-  abgeleitet (`build_team_points_by_matchday` in
-  `kickbase_tool/metrics/calculations.py`).
+- **`/v4/competitions/{id}/players` liefert NICHT den vollen Spielerpool** —
+  nur die ~2 Teams des aktuellen Spieltags-Kontexts (bei uns 25 von ~500
+  Spielern). Der volle Pool wird stattdessen so zusammengesetzt: Tabelle
+  abrufen (18 Teams) → pro Team `/teams/{teamId}/teamprofile` (liefert den
+  kompletten Kader dieses Teams) → pro Spieler
+  `/players/{playerId}` (Detail: Marktwert, Saison-Ø, Status, Tore/Vorlagen/
+  zu-Null) + `/players/{playerId}/performance` (Spieltag-für-Spieltag-Historie).
+  Macht insgesamt ca. 18 + 2×500 Anfragen, mit Cache + Nebenläufigkeit
+  handhabbar (kompletter Lauf aktuell ca. 1 Minute).
+- **Bestätigte Feldnamen** (Kurzformen, wie sie die API tatsächlich benutzt):
+  Spieler-Id `i`, Vorname `fn`, Nachname `ln`, Team-Id `tid`, Position `pos`,
+  Status `st`, Marktwert `mv`, Saison-Punkte-Ø `ap`, Tore `g`, Vorlagen `a`,
+  zu-Null-Spiele `cs`. Tabelle: Team-Id `tid`, Team-Name `tn`, Tabellenplatz
+  `cpl`. Spielplan: Heimteam `t1`, Auswärtsteam `t2`, Status `st` (2 =
+  beendet). Performance-Historie: Spieltag `day`, Punkte `p` (fehlt = nicht
+  gespielt), Minuten `mp` (als String `"90'"`, wird geparst), Start-Flag
+  `st == 5`.
+- **Tore/Vorlagen/zu-Null (Kennzahl 12) sind NICHT pro Spieltag verfügbar** —
+  nur als Saison-Summe auf dem Spieler-Detail-Endpunkt (`g`/`a`/`cs`). Deshalb
+  kommen diese drei Werte direkt von dort, nicht durch Aufsummieren der
+  Performance-Historie.
+- **Verletzt/Gesperrt-Status** (Kennzahl 14): `st == 0` wurde live für gesunde
+  Spieler bestätigt, `st == 2` einmalig für einen Spieler mit kleinerer
+  Blessur (Gnabry). Andere Codes (1, 4, 8, 16, 32, 64, 128, 256) stammen aus
+  einer älteren Community-Quelle und sind für v4 unverifiziert. Aktuell gilt:
+  **jeder Status ≠ 0 führt zum Ausschluss** aus allen drei Rankings
+  (`Player.is_unavailable` in `kickbase_tool/data/models.py`) — wie
+  vorgegeben ("Lass die verhinderten Spieler raus"). Bei abweichenden Codes
+  reicht eine Anpassung von `STATUS_LABELS`/`STATUS_NONE` in dieser Datei.
+- **"letzte 5 Spiele"-Fenster**: Die Performance-Historie enthält für die
+  laufende Saison auch noch nicht gespielte zukünftige Spieltage
+  (vorbefüllt, Status `mdst != 2`). Diese werden beim Einlesen komplett
+  herausgefiltert (`extract_current_season_performance` in `normalize.py`),
+  sonst würde die Fallback-Logik versehentlich zukünftige Spiele statt
+  vergangener zählen.
+- **Team-Punkte pro Spieltag** (Kennzahl 8, 9, 11): Kein direkter Endpunkt
+  dafür gefunden. Wie abgestimmt aus der Summe der tatsächlichen
+  Kickbase-Punkte aller Spieler eines Teams an einem Spieltag abgeleitet
+  (`build_team_points_by_matchday` in `kickbase_tool/metrics/calculations.py`).
 - **Tabellenplatz-Differenz** (Kennzahl 10): `Tabellenplatz(Gegner) −
   Tabellenplatz(eigenes Team)`. Positiv = eigenes Team besser platziert
-  (Favoritenrolle), negativ = Außenseiterrolle. Höherer (positiverer) Wert
-  zählt als "besser" für den Spieler.
+  (Favoritenrolle). Höherer Wert zählt als "besser" für den Spieler.
 - **Restprogramm-Schwierigkeit** (Kennzahl 15): Ø Tabellenplatz der nächsten 5
-  Gegner. Ein höherer Durchschnittswert (z.B. 15 statt 3) bedeutet
-  durchschnittlich schwächere Gegner = leichteres Restprogramm = zählt als
-  "besser".
-- **Kennzahl 12** (Tore/Vorlagen/zu-Null) ist laut Aufgabenstellung eine
-  einzelne von 15 Kennzahlen, obwohl sie 3 Rohwerte bündelt. Umsetzung: jeder
-  der drei Rohwerte wird pro Spieler einzeln über den ganzen Spielerpool
-  gerankt, die drei Ränge werden gemittelt — dieser Mittelwert ist der
-  Eingabewert für die Kategorie in der finalen Rang-Mittelung
-  (`_combined_goals_assists_cleansheets_rank` in `ranking/scoring.py`).
+  Gegner. Höherer Durchschnittswert = durchschnittlich schwächere Gegner =
+  leichteres Restprogramm = zählt als "besser".
+- **Kennzahl 12** bündelt 3 Rohwerte in einer von 15 Rang-Kategorien: jeder
+  Rohwert wird einzeln über den Spielerpool gerankt, die drei Ränge werden
+  gemittelt (`_combined_goals_assists_cleansheets_rank` in `ranking/scoring.py`).
 - **Marktwert-Richtung** (Kennzahl 6): Für "Kauf" gilt günstiger = besser
-  (mehr Budget-Effizienz, ergänzend zu Kennzahl 7). Das ist eine
-  Interpretationsentscheidung, keine Vorgabe aus der Aufgabenstellung — in
+  (Budget-Effizienz). Interpretationsentscheidung, in
   `kickbase_tool/ranking/scoring.py:CATEGORY_DEFINITIONS["market_value"]`
-  mit einem Flag leicht umkehrbar.
-- **Gewichte pro Kategorie**: du wolltest sie selbst vorgeben; Standard ist
-  überall 1.0 (Gleichgewichtung). Anpassung in `weights.yaml`, siehe oben.
+  mit einem Flag umkehrbar.
+- **Gewichte pro Kategorie**: Standard ist überall 1.0 (Gleichgewichtung),
+  bis eigene Werte in `weights.yaml` eingetragen werden.
+- **Sehr früh in der Saison** (z.B. Spieltag 2) haben viele Spieler noch kaum
+  Daten (kein Saison-Ø, keine Form-Historie) — das ist keine Fehlfunktion,
+  sondern echte Datensparsamkeit am Saisonanfang. Diese Spieler landen wegen
+  fehlender Werte automatisch auf den hintersten Rängen der jeweiligen
+  Kategorie (siehe `rank_with_ties` in `kickbase_tool/util.py`).
 
-### Feldnamen kalibrieren
+### Feldnamen weiter kalibrieren
 
-Falls beim ersten echten Lauf Felder leer/falsch aussehen (z.B. `Score`
-überall gleich, oder Spielerliste leer): `python -m kickbase_tool.dump_raw`
-ausführen (mit echten `.env`-Zugangsdaten, außerhalb dieser Sandbox). Das
-Skript speichert Roh-JSON der wichtigsten Endpunkte unter `raw_samples/` —
-darin die exakten Feldnamen nachsehen und in
-`kickbase_tool/data/normalize.py` als zusätzlichen Alias in den jeweiligen
-`pick(...)`-Aufruf ergänzen (mehrere Kandidaten sind dort bereits die Norm).
+Falls sich Endpunkt-Verhalten künftig ändert oder Felder unerwartet leer
+aussehen: `python -m kickbase_tool.dump_raw` liefert frisches Roh-JSON nach
+`raw_samples/` — dort nachsehen und in `kickbase_tool/data/normalize.py` als
+zusätzlichen Alias im jeweiligen `pick(...)`-Aufruf ergänzen.
 
 ## Endpunkte
 
-Basierend auf der v4-Doku (`kickbase_tool/api/endpoints.py`):
+Live bestätigt, siehe `kickbase_tool/api/endpoints.py`:
 
 | Zweck | Pfad |
 |---|---|
 | Login | `POST /v4/user/login` |
-| Kompletter Spielerpool (Bundesliga) | `GET /v4/competitions/{competitionId}/players` |
-| Spieler-Performance-Historie | `GET /v4/competitions/{competitionId}/players/{playerId}/performance` |
+| Team-Kader (18× aufrufen, ein Team pro Aufruf) | `GET /v4/competitions/{competitionId}/teams/{teamId}/teamprofile` |
+| Spieler-Detail (Marktwert, Ø, Status, Tore/Vorlagen/zu-Null) | `GET /v4/competitions/{competitionId}/players/{playerId}` |
+| Spieler-Performance-Historie (Spieltag für Spieltag) | `GET /v4/competitions/{competitionId}/players/{playerId}/performance` |
 | Liga-Tabelle (Bundesliga) | `GET /v4/competitions/{competitionId}/table` |
 | Spielplan/Spieltage | `GET /v4/competitions/{competitionId}/matchdays` |
-| Eigener Kader | `GET /v4/leagues/{leagueId}/squad` |
-| Transfermarkt | `GET /v4/leagues/{leagueId}/market` |
-| Liga-Rangliste (Fantasy) | `GET /v4/leagues/{leagueId}/ranking` |
+| Eigener Kader (optional, ungenutzt) | `GET /v4/leagues/{leagueId}/squad` |
+| Transfermarkt (optional, ungenutzt) | `GET /v4/leagues/{leagueId}/market` |
+| Liga-Rangliste, Fantasy (optional, ungenutzt) | `GET /v4/leagues/{leagueId}/ranking` |
 
-Die Analyse selbst läuft über den kompletten Bundesliga-Spielerpool
-(`/competitions/.../players`), nicht nur über den eigenen Kader — passend zu
-"jeder verfügbare Bundesliga-Spieler". Kader/Markt-Endpunkte sind
-mit angebunden (`dump_raw.py`) und lassen sich in `repository.py` leicht in
-die Analyse einbeziehen (z.B. um Spieler auf dem eigenen Transfermarkt zu
-markieren).
+`/v4/competitions/{competitionId}/players` (ohne Team-/Spieler-Id) ist absichtlich
+**nicht** die Hauptquelle — sie liefert nur einen kleinen, spieltagsbezogenen
+Ausschnitt statt des vollen Pools (siehe oben).
 
 ## Tests
 
@@ -218,6 +224,6 @@ ohne echte API-Daten testbar und wird per `pytest` abgedeckt:
 pytest
 ```
 
-Der API-Client selbst kann in dieser Sandbox nicht gegen die echte Kickbase-API
-getestet werden (Netzwerkzugriff auf `api.kickbase.com` ist hier blockiert) —
-das muss beim ersten Lauf auf deinem eigenen Rechner passieren.
+Der komplette Ablauf inkl. echtem API-Zugriff wurde am 2026-09-05 gegen die
+echte Kickbase-API verifiziert (kompletter Spielerpool, alle 15 Kennzahlen,
+alle 3 Rankings) — kein rein synthetischer Test mehr.

@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-# Status codes per the (older, v3-era) community reverse-engineering of the
-# PlayerStatus enum. Kickbase's v4 API is expected to reuse the same bitmask,
-# but this has not been verified live (see README "Annahmen"). Any status
-# other than NONE (0) is treated as "player unavailable" for ranking purposes,
-# per explicit instruction: unavailable players are filtered out entirely
-# rather than down-ranked.
+# Status codes confirmed against live /v4/competitions/1/players/{id} and
+# /teams/{id}/teamprofile responses: st=0 was seen for healthy players, st=2
+# for a player with a minor issue (Gnabry). Other codes are carried over from
+# older community reverse-engineering and unverified live -- see README
+# "Annahmen". Any status other than NONE (0) is treated as "player
+# unavailable" for ranking purposes, per explicit instruction: unavailable
+# players are filtered out entirely rather than down-ranked.
 STATUS_NONE = 0
 STATUS_LABELS = {
     0: "fit",
@@ -35,9 +36,6 @@ class MatchdayEntry:
     started: bool
     points: Optional[float]
     minutes: Optional[int]
-    goals: int
-    assists: int
-    clean_sheet: bool
     home: Optional[bool]
     team_id: Optional[str]
     opponent_team_id: Optional[str]
@@ -53,6 +51,13 @@ class Player:
     status: Optional[int]
     market_value: Optional[float]
     season_average_points: Optional[float]
+    # Season totals for Kennzahl 12 -- confirmed live as top-level "g"/"a"/"cs"
+    # fields on /v4/competitions/{id}/players/{id}, not derivable per-matchday
+    # (the performance endpoint's per-match entries carry no goal/assist/
+    # clean-sheet breakdown, only the running points total).
+    season_goals: int = 0
+    season_assists: int = 0
+    season_clean_sheets: int = 0
     matchdays: List[MatchdayEntry] = field(default_factory=list)
 
     @property

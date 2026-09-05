@@ -5,7 +5,7 @@ from kickbase_tool.metrics.fallback import compute_recent_form
 def entry(matchday, points, played=True, started=True):
     return MatchdayEntry(
         matchday=matchday, played=played, started=started, points=points, minutes=90 if played else 0,
-        goals=0, assists=0, clean_sheet=False, home=True, team_id="T1", opponent_team_id="T2",
+        home=True, team_id="T1", opponent_team_id="T2",
     )
 
 

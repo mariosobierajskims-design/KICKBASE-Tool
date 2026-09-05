@@ -8,13 +8,13 @@ from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
 from kickbase_tool.config import Settings
 from kickbase_tool.data.models import Fixture, Player, TableEntry
 from kickbase_tool.data.normalize import (
+    extract_current_season_performance,
     extract_fixture_list,
-    extract_performance_list,
     extract_player_list,
     extract_table_list,
     normalize_fixture,
     normalize_performance_entry,
-    normalize_player,
+    normalize_player_detail,
     normalize_table_entry,
 )
 from kickbase_tool.util import as_list, pick
@@ -30,14 +30,6 @@ class Dataset:
 
 def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool = False) -> Dataset:
     cache = JsonFileCache(Path(settings.cache_dir))
-
-    players_raw = cache.get_or_fetch(
-        "competition_players",
-        settings.cache_ttl_volatile_seconds,
-        lambda: client.get(endpoints.COMPETITION_PLAYERS.format(competition_id=settings.competition_id)),
-        force_refresh=force_refresh,
-    )
-    players = [normalize_player(p) for p in extract_player_list(players_raw)]
 
     table_raw = cache.get_or_fetch(
         "competition_table",
@@ -55,16 +47,16 @@ def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool
     )
     fixtures = _normalize_fixtures(matchdays_raw)
 
-    _attach_performance(client, settings, cache, players, force_refresh=force_refresh)
+    player_ids_by_team = _fetch_team_rosters(client, settings, cache, table, force_refresh=force_refresh)
+    players = _fetch_player_details_and_performance(client, settings, cache, player_ids_by_team, force_refresh=force_refresh)
 
     return Dataset(players=players, table=table, fixtures=fixtures)
 
 
 def _normalize_fixtures(matchdays_raw) -> List[Fixture]:
-    """The /matchdays endpoint is expected to group matches per matchday
-    (`{day, matches: [...]}`), but may also return a flat list of matches
-    that already carry their own day number. Both shapes are handled.
-    """
+    """The /matchdays endpoint groups matches per matchday
+    (`{day, it: [...matches]}`), confirmed live; a flat list of matches that
+    already carry their own day number is also handled defensively."""
     top_level = extract_fixture_list(matchdays_raw)
     fixtures: List[Fixture] = []
     for entry in top_level:
@@ -82,36 +74,96 @@ def _normalize_fixtures(matchdays_raw) -> List[Fixture]:
     return fixtures
 
 
-def _attach_performance(
+def _fetch_team_rosters(
     client: KickbaseClient,
     settings: Settings,
     cache: JsonFileCache,
-    players: List[Player],
+    table: List[TableEntry],
     force_refresh: bool,
-) -> None:
-    def fetch_one(player: Player):
-        def do_fetch():
+) -> List[tuple]:
+    """Returns a flat list of (player_id, team_id) by calling teamprofile once
+    per team -- this is the only way to discover the full player pool, since
+    COMPETITION_PLAYERS is scoped to the current matchday's two teams only."""
+
+    def fetch_one(team: TableEntry):
+        raw = cache.get_or_fetch(
+            f"team_roster_{team.team_id}",
+            settings.cache_ttl_volatile_seconds,
+            lambda: client.get(
+                endpoints.COMPETITION_TEAM_PROFILE.format(
+                    competition_id=settings.competition_id, team_id=team.team_id
+                )
+            ),
+            force_refresh=force_refresh,
+        )
+        return [
+            (str(pick(p, "i", "id", "pi")), team.team_id)
+            for p in extract_player_list(raw)
+            if pick(p, "i", "id", "pi") is not None
+        ]
+
+    results: List[tuple] = []
+    with ThreadPoolExecutor(max_workers=settings.max_workers) as pool:
+        futures = {pool.submit(fetch_one, team): team for team in table}
+        for future in as_completed(futures):
+            results.extend(future.result())
+    return results
+
+
+def _fetch_player_details_and_performance(
+    client: KickbaseClient,
+    settings: Settings,
+    cache: JsonFileCache,
+    player_ids_by_team: List[tuple],
+    force_refresh: bool,
+) -> List[Player]:
+    def fetch_one(player_id: str, roster_team_id: str) -> Player:
+        def fetch_detail():
             try:
                 return client.get(
-                    endpoints.COMPETITION_PLAYER_PERFORMANCE.format(
-                        competition_id=settings.competition_id, player_id=player.id
+                    endpoints.COMPETITION_PLAYER_DETAIL.format(
+                        competition_id=settings.competition_id, player_id=player_id
                     )
                 )
             except KickbaseAPIError:
                 return {}
 
-        raw = cache.get_or_fetch(
-            f"performance_{player.id}",
+        def fetch_performance():
+            try:
+                return client.get(
+                    endpoints.COMPETITION_PLAYER_PERFORMANCE.format(
+                        competition_id=settings.competition_id, player_id=player_id
+                    )
+                )
+            except KickbaseAPIError:
+                return {}
+
+        detail_raw = cache.get_or_fetch(
+            f"player_detail_{player_id}", settings.cache_ttl_volatile_seconds, fetch_detail, force_refresh=force_refresh
+        )
+        performance_raw = cache.get_or_fetch(
+            f"performance_{player_id}",
             settings.cache_ttl_performance_seconds,
-            do_fetch,
+            fetch_performance,
             force_refresh=force_refresh,
         )
+
+        player = normalize_player_detail(detail_raw) if detail_raw else Player(
+            id=player_id, first_name="", last_name="", team_id=roster_team_id, position=None,
+            status=None, market_value=None, season_average_points=None,
+        )
+        if not player.team_id:
+            player.team_id = roster_team_id
+
         player.matchdays = [
             normalize_performance_entry(entry, fallback_team_id=player.team_id)
-            for entry in extract_performance_list(raw)
+            for entry in extract_current_season_performance(performance_raw)
         ]
+        return player
 
+    players: List[Player] = []
     with ThreadPoolExecutor(max_workers=settings.max_workers) as pool:
-        futures = {pool.submit(fetch_one, p): p for p in players}
+        futures = {pool.submit(fetch_one, pid, tid): pid for pid, tid in player_ids_by_team}
         for future in as_completed(futures):
-            future.result()
+            players.append(future.result())
+    return players
