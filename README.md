@@ -77,7 +77,7 @@ Alle Kategorie-Gewichte liegen in [`kickbase_tool/ranking/weights.yaml`](kickbas
 standardmäßig alle gleich gewichtet (1.0). Datei direkt bearbeiten oder eine
 eigene Kopie über `--weights` übergeben — kein Code-Änderung nötig.
 
-## Die 15 Kennzahlen
+## Die Kennzahlen
 
 1. Punkte-Ø Saison
 2. Punkte-Ø letzte 5 Spiele (mit Fallback-Logik, siehe unten)
@@ -90,23 +90,24 @@ eigene Kopie über `--weights` übergeben — kein Code-Änderung nötig.
 9. Gegner-Form: gleiche Kennzahl für den nächsten Gegner
 10. Tabellenplatz-Differenz zum nächsten Gegner
 11. Heim/Auswärts-adjustierte Stärke-Differenz zum nächsten Gegner
-12. Tore, Vorlagen, zu-Null-Spiele (eine kombinierte Rang-Kategorie, s.u.)
-13. Startelf-Wahrscheinlichkeit (über dieselben Spiele wie 2-5)
+12. Tore, Vorlagen, zu-Null-Spiele (eine kombinierte Rang-Kategorie, intern
+    90:35:20 gewichtet — siehe unten)
 14. Verletzt/Gesperrt-Flag (Filter, kein Rang-Kriterium)
-15. Restprogramm-Schwierigkeit (Ø Tabellenplatz der nächsten 5 Gegner)
 
-Kennzahl 14 ist laut Vorgabe ein **Ausschlussfilter**: betroffene Spieler
-tauchen in keinem der drei Rankings auf (harte Filterung, kein Soft-Ranking).
-Deshalb fließen in die gewichtete Rang-Mittelung 11 Kategorien (Aufstellung)
-bzw. 14 Kategorien (Kauf/Verkauf) ein — die 15. Kennzahl (Status) ist der
-vorgelagerte Filter.
+Kennzahlen 13 (Startelf-Wahrscheinlichkeit) und 15 (Restprogramm-Schwierigkeit)
+aus der ursprünglichen Aufgabenstellung sind auf ausdrücklichen Wunsch **nicht**
+Teil der Rankings — sie kommen im echten Gewichtungs-Sheet des Nutzers nicht vor
+(siehe "Live-Stand der Feldnamen" unten). Kennzahl 14 ist ein
+**Ausschlussfilter**: betroffene Spieler tauchen in keinem der drei Rankings
+auf (harte Filterung, kein Soft-Ranking). In die gewichtete Rang-Mittelung
+fließen deshalb 10 Kategorien (Aufstellung) bzw. 12 Kategorien (Kauf/Verkauf) ein.
 
-**Verkauf** verwendet exakt dieselben Kategorien wie **Kauf**, aber mit
-umgekehrter Rangfolge je Kategorie (Rang 1 in "Kauf" wird zu Rang N in
-"Verkauf" und umgekehrt) — genau wie in der Aufgabenstellung beschrieben
-("alle 15 Kategorien, aber die Logik ist umgekehrt").
+**Verkauf** verwendet dieselben Kategorien wie **Kauf** (Marktwert weiterhin
+ausgeschlossen bei Aufstellung), aber mit umgekehrter Rangfolge je Kategorie
+(Rang 1 in "Kauf" wird zu Rang N in "Verkauf" und umgekehrt) und einer eigenen,
+deutlich stärker auf Saison-Ø fokussierten Gewichtung (siehe `weights.yaml`).
 
-## Fallback-Logik für "letzte 5 Spiele" (Kennzahl 2-4, 13)
+## Fallback-Logik für "letzte 5 Spiele" (Kennzahl 2-4)
 
 Implementiert in [`kickbase_tool/metrics/fallback.py`](kickbase_tool/metrics/fallback.py),
 mit Tests in [`tests/test_fallback.py`](tests/test_fallback.py):
@@ -117,6 +118,29 @@ mit Tests in [`tests/test_fallback.py`](tests/test_fallback.py):
 | 4 von 5 | genau diese 4 |
 | 3 von 5 | die letzten **4** tatsächlich bestrittenen Spiele (auch wenn dafür weiter zurückgegangen wird) |
 | 0-2 von 5 | die letzten **5** tatsächlich bestrittenen Spiele (unabhängig davon wie weit das zurückliegt) |
+
+## Herkunft der Gewichte
+
+`kickbase_tool/ranking/weights.yaml` ist kalibriert an einem bereits bestehenden
+Google Sheet des Nutzers (eigenes, manuell gepflegtes Rang-basiertes
+Bewertungssystem, abgeglichen am 2026-09-05). Vorgehen:
+
+- Wo das Sheet für eine Kategorie eine erkennbare Formel-Gewichtung hatte, wurde
+  genau dieser Wert übernommen (z.B. Saison-Ø 20% bei Aufstellung/Kauf, aber 35%
+  bei Verkauf; PPM 15-17,5% bei Kauf/Verkauf).
+- Kategorien ohne erkennbare Entsprechung im Sheet (z.B. Min/Max einzeln,
+  Tabellenplatz-Differenz) behalten den Standardwert 1.0.
+- Die interne 90:35:20-Gewichtung von Tore:Vorlagen:Zu-Null innerhalb Kennzahl 12
+  stammt direkt aus der entsprechenden Sheet-Formel
+  (`=SUM(Rang_Tore*90+Rang_Vorlagen*35+Rang_ZuNull*20)/145`).
+- Das Sheet selbst rankt nur unter einer kuratierten Wunschliste (~25 Spieler);
+  auf ausdrücklichen Wunsch ranken die 3 Tool-Rankings stattdessen über den
+  **kompletten** Bundesliga-Pool.
+- Zwei Abweichungen der Sheet-Formeln von der ursprünglichen Aufgabenstellung
+  wurden bewusst **nicht** übernommen: Verkauf verwendet weiterhin die volle
+  Kauf-Kategorienliste (nur umgekehrt), statt der im Sheet enger gefassten
+  Auswahl; Marktwert/PPM bleiben bei Aufstellung ausgeschlossen, obwohl das
+  Sheet PPM dort mitgewichtet.
 
 ## Live-Stand der Feldnamen
 
@@ -170,18 +194,16 @@ unten), nicht nur geraten. Wichtigste bestätigte Erkenntnisse:
 - **Tabellenplatz-Differenz** (Kennzahl 10): `Tabellenplatz(Gegner) −
   Tabellenplatz(eigenes Team)`. Positiv = eigenes Team besser platziert
   (Favoritenrolle). Höherer Wert zählt als "besser" für den Spieler.
-- **Restprogramm-Schwierigkeit** (Kennzahl 15): Ø Tabellenplatz der nächsten 5
-  Gegner. Höherer Durchschnittswert = durchschnittlich schwächere Gegner =
-  leichteres Restprogramm = zählt als "besser".
-- **Kennzahl 12** bündelt 3 Rohwerte in einer von 15 Rang-Kategorien: jeder
-  Rohwert wird einzeln über den Spielerpool gerankt, die drei Ränge werden
-  gemittelt (`_combined_goals_assists_cleansheets_rank` in `ranking/scoring.py`).
+- **Kennzahl 12** bündelt 3 Rohwerte in einer Rang-Kategorie: jeder Rohwert
+  wird einzeln über den Spielerpool gerankt, die drei Ränge werden 90:35:20
+  (Tore:Vorlagen:Zu-Null) gewichtet kombiniert — Gewichte aus dem Nutzer-Sheet
+  übernommen (`_combined_goals_assists_cleansheets_rank` in `ranking/scoring.py`).
 - **Marktwert-Richtung** (Kennzahl 6): Für "Kauf" gilt günstiger = besser
   (Budget-Effizienz). Interpretationsentscheidung, in
   `kickbase_tool/ranking/scoring.py:CATEGORY_DEFINITIONS["market_value"]`
   mit einem Flag umkehrbar.
-- **Gewichte pro Kategorie**: Standard ist überall 1.0 (Gleichgewichtung),
-  bis eigene Werte in `weights.yaml` eingetragen werden.
+- **Gewichte pro Kategorie**: aus dem Nutzer-Sheet übernommen, siehe Abschnitt
+  "Herkunft der Gewichte" oben.
 - **Sehr früh in der Saison** (z.B. Spieltag 2) haben viele Spieler noch kaum
   Daten (kein Saison-Ø, keine Form-Historie) — das ist keine Fehlfunktion,
   sondern echte Datensparsamkeit am Saisonanfang. Diese Spieler landen wegen

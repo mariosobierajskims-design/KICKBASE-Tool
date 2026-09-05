@@ -64,11 +64,6 @@ def normalize_performance_entry(raw: dict, fallback_team_id: Optional[str]) -> M
     matchday = pick(raw, "day", "matchday", "md", "dayNumber", "dn")
     points = _to_float(pick(raw, "p", "points", "pt"))
     minutes = _parse_minutes(pick(raw, "mp", "minutesPlayed", "minutes", "min"))
-    # st==5 was confirmed live as "started"; other per-match codes (e.g. 3 for
-    # a substitute appearance) are carried over from an older sample and
-    # unverified for the current season's schema.
-    match_status = pick(raw, "st")
-    started = match_status == 5
 
     team1 = pick(raw, "t1", "homeTeamId", "th")
     team2 = pick(raw, "t2", "awayTeamId", "ta")
@@ -86,7 +81,6 @@ def normalize_performance_entry(raw: dict, fallback_team_id: Optional[str]) -> M
     return MatchdayEntry(
         matchday=int(matchday) if matchday is not None else -1,
         played=played,
-        started=bool(started),
         points=points,
         minutes=minutes,
         home=home,

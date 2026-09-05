@@ -25,16 +25,14 @@ CATEGORY_DEFINITIONS = {
     "opponent_form": (lambda pm: pm.opponent_form, False),  # weaker opponent = better for the player
     "table_position_diff": (lambda pm: pm.table_position_diff, True),
     "venue_form_diff": (lambda pm: pm.venue_form_diff, True),
-    "start_rate": (lambda pm: pm.recent_form.start_rate, True),
-    "remaining_schedule": (lambda pm: pm.remaining_schedule_difficulty, True),  # higher avg opponent position = weaker opponents = easier
 }
 
 AUFSTELLUNG_CATEGORIES = [
     "season_avg", "recent_avg", "recent_min", "recent_max", "recent_min_max_avg",
     "team_form", "opponent_form", "table_position_diff", "venue_form_diff",
-    "goals_assists_cleansheets", "start_rate",
+    "goals_assists_cleansheets",
 ]
-KAUF_CATEGORIES = AUFSTELLUNG_CATEGORIES + ["market_value", "points_per_value", "remaining_schedule"]
+KAUF_CATEGORIES = AUFSTELLUNG_CATEGORIES + ["market_value", "points_per_value"]
 VERKAUF_CATEGORIES = KAUF_CATEGORIES
 
 
@@ -50,13 +48,20 @@ def load_weights(path: Path = DEFAULT_WEIGHTS_PATH) -> dict:
         return yaml.safe_load(f)
 
 
+# Goals:assists:clean-sheets sub-weights within Kennzahl 12, taken from the
+# user's own Google Sheet formula (=SUM(W*90+Y*35+AA*20)/145, where W/Y/AA are
+# the rank-of-goals/assists/clean-sheets columns) -- goals count roughly 4.5x
+# more than clean sheets, assists about 1.75x more.
+GOALS_ASSISTS_CLEANSHEETS_WEIGHTS = {"goals": 90, "assists": 35, "clean_sheets": 20}
+
+
 def _combined_goals_assists_cleansheets_rank(metrics_by_id: Dict[str, PlayerMetrics]) -> Dict[str, float]:
     """Kennzahl 12 bundles three raw stats (Tore, Vorlagen, zu-Null) into a single
     rank category, as required ("15 Kennzahlen" total). Each raw stat is ranked
     across the player pool on its own (higher = better), then the three ranks
-    are averaged into one composite value per player. That composite is itself
-    already rank-like (lower = better), so it is exposed as a "lower is better"
-    category to the generic ranking pipeline.
+    are combined with GOALS_ASSISTS_CLEANSHEETS_WEIGHTS into one composite value
+    per player. That composite is itself already rank-like (lower = better), so
+    it is exposed as a "lower is better" category to the generic ranking pipeline.
     """
     goals = {pid: pm.goals for pid, pm in metrics_by_id.items()}
     assists = {pid: pm.assists for pid, pm in metrics_by_id.items()}
@@ -66,8 +71,10 @@ def _combined_goals_assists_cleansheets_rank(metrics_by_id: Dict[str, PlayerMetr
     assist_ranks = rank_with_ties(assists, higher_is_better=True)
     clean_sheet_ranks = rank_with_ties(clean_sheets, higher_is_better=True)
 
+    w = GOALS_ASSISTS_CLEANSHEETS_WEIGHTS
+    total_w = w["goals"] + w["assists"] + w["clean_sheets"]
     return {
-        pid: (goal_ranks[pid] + assist_ranks[pid] + clean_sheet_ranks[pid]) / 3
+        pid: (goal_ranks[pid] * w["goals"] + assist_ranks[pid] * w["assists"] + clean_sheet_ranks[pid] * w["clean_sheets"]) / total_w
         for pid in metrics_by_id
     }
 

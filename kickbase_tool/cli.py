@@ -106,8 +106,7 @@ def _export_csv(out_dir: Path, ranking_key: str, order: List[str], metrics_by_id
             "rang", "spieler", "position", "team_id", "score",
             "saison_avg", "letzte5_avg", "letzte5_min", "letzte5_max", "letzte5_min_max_avg",
             "marktwert", "punkte_pro_marktwert", "team_form", "gegner_form",
-            "tabellenplatz_diff", "venue_form_diff", "tore", "vorlagen", "zu_null",
-            "startelf_quote", "restprogramm_schwierigkeit", "status",
+            "tabellenplatz_diff", "venue_form_diff", "tore", "vorlagen", "zu_null", "status",
         ])
         for i, pid in enumerate(order):
             pm = metrics_by_id[pid]
@@ -117,8 +116,7 @@ def _export_csv(out_dir: Path, ranking_key: str, order: List[str], metrics_by_id
                 pm.season_average, pm.recent_form.average, pm.recent_form.minimum, pm.recent_form.maximum,
                 pm.recent_form.min_max_average, pm.market_value, pm.points_per_market_value,
                 pm.team_form, pm.opponent_form, pm.table_position_diff, pm.venue_form_diff,
-                pm.goals, pm.assists, pm.clean_sheets, pm.recent_form.start_rate,
-                pm.remaining_schedule_difficulty, p.status_text,
+                pm.goals, pm.assists, pm.clean_sheets, p.status_text,
             ])
     print(f"CSV geschrieben: {path}")
 

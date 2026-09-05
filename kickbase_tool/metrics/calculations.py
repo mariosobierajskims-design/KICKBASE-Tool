@@ -8,7 +8,6 @@ from kickbase_tool.util import mean
 
 RECENT_FORM_WINDOW = 5
 TEAM_FORM_WINDOW = 5
-REMAINING_SCHEDULE_WINDOW = 5
 
 
 @dataclass
@@ -31,8 +30,6 @@ class PlayerMetrics:
     goals: int
     assists: int
     clean_sheets: int
-
-    remaining_schedule_difficulty: Optional[float]
 
     next_opponent_team_id: Optional[str]
     next_match_is_home: Optional[bool]
@@ -98,14 +95,6 @@ def next_fixture_for_team(fixtures: List[Fixture], team_id: str) -> Optional[Fix
     return min(upcoming, key=lambda f: f.matchday)
 
 
-def next_n_fixtures_for_team(fixtures: List[Fixture], team_id: str, n: int) -> List[Fixture]:
-    upcoming = sorted(
-        (f for f in fixtures if not f.finished and team_id in (f.home_team_id, f.away_team_id)),
-        key=lambda f: f.matchday,
-    )
-    return upcoming[:n]
-
-
 def opponent_in_fixture(fixture: Fixture, team_id: str) -> str:
     return fixture.away_team_id if fixture.home_team_id == team_id else fixture.home_team_id
 
@@ -155,16 +144,6 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         assists = player.season_assists
         clean_sheets = player.season_clean_sheets
 
-        remaining_difficulty = None
-        if own_team_id:
-            next5 = next_n_fixtures_for_team(dataset.fixtures, own_team_id, REMAINING_SCHEDULE_WINDOW)
-            opponent_positions = [
-                table_by_team[opponent_in_fixture(f, own_team_id)].position
-                for f in next5
-                if opponent_in_fixture(f, own_team_id) in table_by_team
-            ]
-            remaining_difficulty = mean(opponent_positions)
-
         results[player.id] = PlayerMetrics(
             player=player,
             season_average=season_average,
@@ -180,7 +159,6 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             goals=goals,
             assists=assists,
             clean_sheets=clean_sheets,
-            remaining_schedule_difficulty=remaining_difficulty,
             next_opponent_team_id=opponent_id,
             next_match_is_home=is_home_next,
         )

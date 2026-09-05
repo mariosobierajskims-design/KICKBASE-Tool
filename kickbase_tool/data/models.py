@@ -33,7 +33,6 @@ def status_label(status: Optional[int]) -> str:
 class MatchdayEntry:
     matchday: int
     played: bool
-    started: bool
     points: Optional[float]
     minutes: Optional[int]
     home: Optional[bool]

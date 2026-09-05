@@ -12,7 +12,6 @@ class RecentForm:
     minimum: Optional[float]
     maximum: Optional[float]
     min_max_average: Optional[float]
-    start_rate: Optional[float]
 
 
 def compute_recent_form(entries_desc: List[MatchdayEntry]) -> RecentForm:
@@ -42,19 +41,17 @@ def compute_recent_form(entries_desc: List[MatchdayEntry]) -> RecentForm:
 
     chosen = played_all[:games_needed]
     if not chosen:
-        return RecentForm(games_used=0, average=None, minimum=None, maximum=None, min_max_average=None, start_rate=None)
+        return RecentForm(games_used=0, average=None, minimum=None, maximum=None, min_max_average=None)
 
     points = [e.points for e in chosen if e.points is not None]
     if not points:
-        return RecentForm(games_used=len(chosen), average=None, minimum=None, maximum=None, min_max_average=None, start_rate=None)
+        return RecentForm(games_used=len(chosen), average=None, minimum=None, maximum=None, min_max_average=None)
 
     lo, hi = min(points), max(points)
-    started = sum(1 for e in chosen if e.started)
     return RecentForm(
         games_used=len(chosen),
         average=mean(points),
         minimum=lo,
         maximum=hi,
         min_max_average=(lo + hi) / 2,
-        start_rate=started / len(chosen),
     )
