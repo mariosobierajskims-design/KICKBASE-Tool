@@ -9,9 +9,20 @@ from kickbase_tool.util import as_list, pick
 # case the shape differs for other endpoints/contexts.
 
 
+KICKBASE_CDN_BASE = "https://kickbase.b-cdn.net/"
+
+
+def _cdn_url(path: Optional[str]) -> Optional[str]:
+    if not path:
+        return None
+    return KICKBASE_CDN_BASE + str(path).lstrip("/")
+
+
 def normalize_player_detail(raw: dict) -> Player:
     """Normalizes /v4/competitions/{competitionId}/players/{playerId} --
-    confirmed fields: i, fn, ln, tid, pos, st, mv, ap, g, a, cs."""
+    confirmed fields: i, fn, ln, tid, pos, st, mv, ap, g, a, cs, pim, tim.
+    pim/tim are relative CDN paths (e.g. "content/file/<hash>.png") that
+    resolve against KICKBASE_CDN_BASE -- confirmed live on 2026-09-05."""
     pid = pick(raw, "i", "id", "pi", "playerId")
     team_id = pick(raw, "tid", "teamId", "team_id")
     return Player(
@@ -26,6 +37,8 @@ def normalize_player_detail(raw: dict) -> Player:
         season_goals=int(pick(raw, "g", "goals", default=0) or 0),
         season_assists=int(pick(raw, "a", "assists", default=0) or 0),
         season_clean_sheets=int(pick(raw, "cs", "cleanSheets", default=0) or 0),
+        image_url=_cdn_url(pick(raw, "pim", "playerImage")),
+        team_logo_url=_cdn_url(pick(raw, "tim", "teamImage")),
     )
 
 

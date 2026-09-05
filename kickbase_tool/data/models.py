@@ -57,6 +57,8 @@ class Player:
     season_goals: int = 0
     season_assists: int = 0
     season_clean_sheets: int = 0
+    image_url: Optional[str] = None
+    team_logo_url: Optional[str] = None
     matchdays: List[MatchdayEntry] = field(default_factory=list)
 
     @property

@@ -17,6 +17,7 @@ from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
 from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
 from kickbase_tool.data.repository import fetch_owned_player_ids, load_dataset
+from kickbase_tool.images import fetch_player_thumbnail, fetch_team_logo
 from kickbase_tool.metrics.calculations import compute_all_metrics
 from kickbase_tool.ranking.scoring import compute_all_rankings
 
@@ -50,6 +51,8 @@ def build_rows(argv=None) -> list:
             "position": POSITION_LABELS.get(p.position, "?"),
             "team_id": p.team_id,
             "team_name": team_names.get(p.team_id, p.team_id or "?"),
+            "image_data": fetch_player_thumbnail(p.image_url),
+            "team_logo_data": fetch_team_logo(p.team_logo_url),
             "status": p.status_text,
             "unavailable": p.is_unavailable,
             "owned": pid in owned_ids,
