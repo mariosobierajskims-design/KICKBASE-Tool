@@ -1,0 +1,70 @@
+# Gewichtung pro Kategorie fuer die drei Rankings.
+#
+# Die finale Platzierung ist der gewichtete Durchschnitt der Rang-Platzierungen
+# (1 = beste Auspraegung) ueber alle hier gelisteten Kategorien einer Sektion.
+# Alle Kategorien starten mit Gewicht 1.0 (gleichgewichtet) -- passe die Werte
+# unten frei an, ohne Code aendern zu muessen.
+#
+# Kategorie-Schluessel (entsprechen den 15 Kennzahlen aus der Aufgabenstellung):
+#   season_avg                 (1)  Punkte-Durchschnitt Saison
+#   recent_avg                 (2)  Punkte-Durchschnitt letzte 5 Spiele (mit Fallback)
+#   recent_min                 (3)  Minimum letzte 5 Spiele
+#   recent_max                 (4)  Maximum letzte 5 Spiele
+#   recent_min_max_avg         (5)  Durchschnitt aus Min/Max
+#   market_value                (6)  Aktueller Marktwert (nur Kauf/Verkauf)
+#   points_per_value            (7)  Punkte pro Marktwert (nur Kauf/Verkauf)
+#   team_form                   (8)  Team-Form (letzte 5 Spiele)
+#   opponent_form                (9)  Gegner-Form (naechster Spieltag)
+#   table_position_diff         (10) Tabellenplatz-Differenz zum naechsten Gegner
+#   venue_form_diff              (11) Heim/Auswaerts-adjustierte Staerke-Differenz
+#   goals_assists_cleansheets     (12) Tore/Vorlagen/zu-Null (kombinierte Kategorie)
+#   start_rate                    (13) Startelf-Wahrscheinlichkeit
+#   remaining_schedule             (15) Restprogramm-Schwierigkeit (nur Kauf/Verkauf)
+#
+# Kennzahl 14 (Verletzt/Gesperrt) ist kein Rang-Kriterium, sondern ein harter
+# Ausschlussfilter -- betroffene Spieler tauchen in keinem der drei Rankings auf.
+
+aufstellung:
+  season_avg: 1.0
+  recent_avg: 1.0
+  recent_min: 1.0
+  recent_max: 1.0
+  recent_min_max_avg: 1.0
+  team_form: 1.0
+  opponent_form: 1.0
+  table_position_diff: 1.0
+  venue_form_diff: 1.0
+  goals_assists_cleansheets: 1.0
+  start_rate: 1.0
+
+kauf:
+  season_avg: 1.0
+  recent_avg: 1.0
+  recent_min: 1.0
+  recent_max: 1.0
+  recent_min_max_avg: 1.0
+  market_value: 1.0
+  points_per_value: 1.0
+  team_form: 1.0
+  opponent_form: 1.0
+  table_position_diff: 1.0
+  venue_form_diff: 1.0
+  goals_assists_cleansheets: 1.0
+  start_rate: 1.0
+  remaining_schedule: 1.0
+
+verkauf:
+  season_avg: 1.0
+  recent_avg: 1.0
+  recent_min: 1.0
+  recent_max: 1.0
+  recent_min_max_avg: 1.0
+  market_value: 1.0
+  points_per_value: 1.0
+  team_form: 1.0
+  opponent_form: 1.0
+  table_position_diff: 1.0
+  venue_form_diff: 1.0
+  goals_assists_cleansheets: 1.0
+  start_rate: 1.0
+  remaining_schedule: 1.0
