@@ -33,6 +33,21 @@ class KickbaseClient:
             self._session.headers["Authorization"] = f"Bearer {token}"
         return data
 
+    def use_token(self, token: str) -> None:
+        """Authenticate with a token captured manually from a logged-in browser
+        session (e.g. from the "kkstrauth" cookie or an Authorization header
+        seen in DevTools) instead of calling /user/login. Needed for accounts
+        that only have "Sign in with Apple/Google" linked and therefore have no
+        email+password combination the documented login endpoint accepts.
+
+        The token is set both as a bearer header and as the "kkstrauth" cookie
+        since it isn't confirmed from public docs which one the API actually
+        checks -- sending both is harmless.
+        """
+        self._token = token
+        self._session.headers["Authorization"] = f"Bearer {token}"
+        self._session.cookies.set("kkstrauth", token, domain="kickbase.com")
+
     def get(self, path: str, params: Optional[dict] = None) -> Any:
         return self._request("GET", path, params=params)
 

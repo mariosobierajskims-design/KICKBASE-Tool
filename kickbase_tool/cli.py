@@ -7,7 +7,7 @@ from typing import Dict, List
 from tabulate import tabulate
 
 from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
-from kickbase_tool.config import load_settings
+from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
 from kickbase_tool.data.repository import load_dataset
 from kickbase_tool.metrics.calculations import PlayerMetrics, compute_all_metrics
@@ -57,7 +57,7 @@ def main(argv=None) -> int:
 
     client = KickbaseClient(request_delay_seconds=settings.request_delay_seconds)
     try:
-        client.login(settings.email, settings.password)
+        authenticate(client, settings)
     except KickbaseAPIError as exc:
         print(f"Login fehlgeschlagen: {exc}", file=sys.stderr)
         return 1

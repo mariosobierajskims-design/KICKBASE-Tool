@@ -16,12 +16,39 @@ source .venv/bin/activate
 pip install -r requirements.txt      # oder requirements-dev.txt für Tests
 
 cp .env.example .env
-# .env mit echter E-Mail/Passwort/Liga-ID ausfüllen
+# .env mit echten Zugangsdaten ausfüllen (siehe unten, je nach Login-Art)
 ```
 
 Die `.env`-Datei wird von `.gitignore` ausgeschlossen und nie eingecheckt.
 Zugangsdaten stehen an keiner Stelle im Code — sie werden ausschließlich zur
 Laufzeit über `python-dotenv` aus `.env` gelesen (`kickbase_tool/config.py`).
+
+Eine Liga-ID ist für die Kern-Datenbank **nicht** nötig: der komplette
+Bundesliga-Spielerpool, Performance-Historie, Marktwerte, Tabelle und
+Spielplan kommen aus liga-unabhängigen `/v4/competitions/...`-Endpunkten.
+`KICKBASE_LEAGUE_ID` wird nur für optionale, noch nicht eingebaute Extras
+gebraucht (eigener Kader/Markt einer bestimmten Liga).
+
+### Login über Apple/Google ("Sign in with")
+
+Kickbase-Accounts, die nur über Apple/Google verknüpft sind, haben kein
+Passwort — der dokumentierte Login-Endpoint akzeptiert aber ausschließlich
+Email+Passwort, ein API-Weg für Social-Login ist öffentlich nicht bekannt.
+Falls dein Account so eingerichtet ist (Support-Kontakt nötig, um das zu
+ändern, ist meist kein praktikabler erster Schritt):
+
+1. In einem Browser auf `web.kickbase.com` einloggen.
+2. Entwicklertools öffnen (F12) → Tab **Netzwerk** → Seite neu laden.
+3. Eine beliebige Anfrage an `api.kickbase.com` anklicken und im Cookie
+   `kkstrauth` oder im `Authorization: Bearer ...`-Header den Token-Wert
+   kopieren.
+4. In `.env` statt `KICKBASE_EMAIL`/`KICKBASE_PASSWORD` eintragen:
+   ```
+   KICKBASE_AUTH_TOKEN=<kopierter-wert>
+   ```
+
+Der Token läuft nach einiger Zeit ab und muss dann auf demselben Weg erneuert
+werden (`kickbase_tool/api/client.py:use_token()`).
 
 ## Nutzung
 

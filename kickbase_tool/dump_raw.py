@@ -13,7 +13,7 @@ from pathlib import Path
 
 from kickbase_tool.api import endpoints
 from kickbase_tool.api.client import KickbaseClient
-from kickbase_tool.config import load_settings
+from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.normalize import extract_player_list
 
 
@@ -34,14 +34,17 @@ def main(argv=None) -> int:
             json.dump(data, f, indent=2, ensure_ascii=False)
         print(f"geschrieben: {path}")
 
-    login_resp = client.login(settings.email, settings.password)
-    dump("login", login_resp)
+    authenticate(client, settings)
+    print("Login/Token OK.")
 
-    squad = client.get(endpoints.LEAGUE_SQUAD.format(league_id=settings.league_id))
-    dump("league_squad", squad)
+    if settings.league_id:
+        squad = client.get(endpoints.LEAGUE_SQUAD.format(league_id=settings.league_id))
+        dump("league_squad", squad)
 
-    market = client.get(endpoints.LEAGUE_MARKET.format(league_id=settings.league_id))
-    dump("league_market", market)
+        market = client.get(endpoints.LEAGUE_MARKET.format(league_id=settings.league_id))
+        dump("league_market", market)
+    else:
+        print("KICKBASE_LEAGUE_ID nicht gesetzt -- ueberspringe eigener Kader/Markt (nicht fuer die Kern-Datenbank noetig).")
 
     players = client.get(endpoints.COMPETITION_PLAYERS.format(competition_id=settings.competition_id))
     dump("competition_players", players)
@@ -63,8 +66,9 @@ def main(argv=None) -> int:
     matchdays = client.get(endpoints.COMPETITION_MATCHDAYS.format(competition_id=settings.competition_id))
     dump("competition_matchdays", matchdays)
 
-    ranking = client.get(endpoints.LEAGUE_RANKING.format(league_id=settings.league_id))
-    dump("league_ranking", ranking)
+    if settings.league_id:
+        ranking = client.get(endpoints.LEAGUE_RANKING.format(league_id=settings.league_id))
+        dump("league_ranking", ranking)
 
     print(f"\nFertig. Rohdaten liegen unter {out_dir}/ -- damit lassen sich die Feldnamen in "
           f"kickbase_tool/data/normalize.py bei Bedarf praezisieren.")
