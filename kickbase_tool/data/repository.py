@@ -53,6 +53,15 @@ def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool
     return Dataset(players=players, table=table, fixtures=fixtures)
 
 
+def fetch_owned_player_ids(client: KickbaseClient, settings: Settings) -> set:
+    """Player ids currently on the user's own squad in their league
+    (/v4/leagues/{leagueId}/squad) -- requires KICKBASE_LEAGUE_ID."""
+    if not settings.league_id:
+        return set()
+    raw = client.get(endpoints.LEAGUE_SQUAD.format(league_id=settings.league_id))
+    return {str(pick(p, "i", "id", "pi")) for p in extract_player_list(raw) if pick(p, "i", "id", "pi") is not None}
+
+
 def _normalize_fixtures(matchdays_raw) -> List[Fixture]:
     """The /matchdays endpoint groups matches per matchday
     (`{day, it: [...matches]}`), confirmed live; a flat list of matches that
