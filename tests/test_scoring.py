@@ -18,7 +18,8 @@ def make_player_metrics(pid, season_avg, market_value, goals=0, assists=0, clean
         team_form=5.0, opponent_form=5.0, table_position_diff=0.0,
         own_venue_form=5.0, opponent_venue_form=5.0, venue_form_diff=0.0,
         goals=goals, assists=assists, clean_sheets=clean_sheets,
-        next_opponent_team_id="T2", next_match_is_home=True,
+        next_opponent_team_id="T2", next_opponent_name="Team2", next_match_is_home=True,
+        upcoming_opponents=[], remaining_schedule_difficulty=None,
     )
 
 

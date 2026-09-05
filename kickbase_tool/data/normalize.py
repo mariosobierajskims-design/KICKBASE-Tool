@@ -62,18 +62,27 @@ def extract_current_season_performance(performance_raw: dict) -> list:
 
 def normalize_performance_entry(raw: dict, fallback_team_id: Optional[str]) -> MatchdayEntry:
     matchday = pick(raw, "day", "matchday", "md", "dayNumber", "dn")
-    points = _to_float(pick(raw, "p", "points", "pt"))
+    # NOTE: "pt" is NOT points -- confirmed live it's the player's own team id
+    # for that match (matches whichever of t1/t2 is their side), which for
+    # some teams (e.g. Frankfurt = "4") looks deceptively like a small point
+    # total. Using it as a points fallback produced phantom points for
+    # players who didn't play at all that matchday (no "p" key present).
+    points = _to_float(pick(raw, "p", "points"))
     minutes = _parse_minutes(pick(raw, "mp", "minutesPlayed", "minutes", "min"))
 
     team1 = pick(raw, "t1", "homeTeamId", "th")
     team2 = pick(raw, "t2", "awayTeamId", "ta")
-    team_id = fallback_team_id
+    # "pt" doubles as the authoritative per-match team id when present --
+    # more reliable than the player's *current* team for historical entries
+    # from before a mid-season transfer.
+    own_team_id = pick(raw, "pt") or fallback_team_id
+    team_id = own_team_id
     home = None
     opponent_team_id = None
-    if team1 is not None and team2 is not None and fallback_team_id is not None:
-        if str(team1) == str(fallback_team_id):
+    if team1 is not None and team2 is not None and own_team_id is not None:
+        if str(team1) == str(own_team_id):
             home, opponent_team_id = True, team2
-        elif str(team2) == str(fallback_team_id):
+        elif str(team2) == str(own_team_id):
             home, opponent_team_id = False, team1
 
     played = points is not None

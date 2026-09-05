@@ -8,6 +8,7 @@ from kickbase_tool.util import mean
 
 RECENT_FORM_WINDOW = 5
 TEAM_FORM_WINDOW = 5
+UPCOMING_FIXTURES_WINDOW = 5
 
 
 @dataclass
@@ -32,7 +33,13 @@ class PlayerMetrics:
     clean_sheets: int
 
     next_opponent_team_id: Optional[str]
+    next_opponent_name: Optional[str]
     next_match_is_home: Optional[bool]
+    # Informational only (not a ranking category, see README) -- the next
+    # UPCOMING_FIXTURES_WINDOW opponents with name/table position/venue, and
+    # the average opponent table position across them.
+    upcoming_opponents: List[dict]
+    remaining_schedule_difficulty: Optional[float]
 
 
 TeamPointsByMatchday = Dict[Tuple[str, int], float]
@@ -95,6 +102,14 @@ def next_fixture_for_team(fixtures: List[Fixture], team_id: str) -> Optional[Fix
     return min(upcoming, key=lambda f: f.matchday)
 
 
+def next_n_fixtures_for_team(fixtures: List[Fixture], team_id: str, n: int) -> List[Fixture]:
+    upcoming = sorted(
+        (f for f in fixtures if not f.finished and team_id in (f.home_team_id, f.away_team_id)),
+        key=lambda f: f.matchday,
+    )
+    return upcoming[:n]
+
+
 def opponent_in_fixture(fixture: Fixture, team_id: str) -> str:
     return fixture.away_team_id if fixture.home_team_id == team_id else fixture.home_team_id
 
@@ -144,6 +159,24 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         assists = player.season_assists
         clean_sheets = player.season_clean_sheets
 
+        next_opponent_name = table_by_team[opponent_id].team_name if opponent_id in table_by_team else opponent_id
+
+        upcoming_opponents = []
+        if own_team_id:
+            for f in next_n_fixtures_for_team(dataset.fixtures, own_team_id, UPCOMING_FIXTURES_WINDOW):
+                opp_id = opponent_in_fixture(f, own_team_id)
+                opp_entry = table_by_team.get(opp_id)
+                upcoming_opponents.append({
+                    "matchday": f.matchday,
+                    "team_id": opp_id,
+                    "team_name": opp_entry.team_name if opp_entry else opp_id,
+                    "position": opp_entry.position if opp_entry else None,
+                    "home": f.home_team_id == own_team_id,
+                })
+        remaining_difficulty = mean(
+            o["position"] for o in upcoming_opponents if o["position"] is not None
+        ) if upcoming_opponents else None
+
         results[player.id] = PlayerMetrics(
             player=player,
             season_average=season_average,
@@ -160,6 +193,9 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             assists=assists,
             clean_sheets=clean_sheets,
             next_opponent_team_id=opponent_id,
+            next_opponent_name=next_opponent_name,
             next_match_is_home=is_home_next,
+            upcoming_opponents=upcoming_opponents,
+            remaining_schedule_difficulty=remaining_difficulty,
         )
     return results
