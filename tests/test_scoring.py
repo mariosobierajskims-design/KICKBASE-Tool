@@ -20,6 +20,7 @@ def make_player_metrics(pid, season_avg, market_value, goals=0, assists=0, clean
         goals=goals, assists=assists, clean_sheets=clean_sheets,
         next_opponent_team_id="T2", next_opponent_name="Team2", next_match_is_home=True,
         upcoming_opponents=[], remaining_schedule_difficulty=None,
+        team_momentum=None, opponent_momentum=None,
     )
 
 

@@ -70,6 +70,8 @@ def build_rows(argv=None) -> list:
                 for o in pm.upcoming_opponents
             ],
             "remaining_schedule_difficulty": pm.remaining_schedule_difficulty,
+            "team_momentum": pm.team_momentum,
+            "opponent_momentum": pm.opponent_momentum,
             "goals": pm.goals,
             "assists": pm.assists,
             "clean_sheets": pm.clean_sheets,

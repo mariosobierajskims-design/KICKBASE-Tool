@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 from kickbase_tool.data.models import Fixture, Player, TableEntry
 from kickbase_tool.data.repository import Dataset
 from kickbase_tool.metrics.fallback import RecentForm, compute_recent_form
-from kickbase_tool.util import mean
+from kickbase_tool.util import mean, rank_with_ties
 
 RECENT_FORM_WINDOW = 5
 TEAM_FORM_WINDOW = 5
@@ -40,6 +40,16 @@ class PlayerMetrics:
     # the average opponent table position across them.
     upcoming_opponents: List[dict]
     remaining_schedule_difficulty: Optional[float]
+
+    # "Formsteigerung" (momentum): current rolling-5-game form rank (1=best
+    # among all 18 teams) plus the change vs. the same rank two matchdays
+    # ago -- low value = strong AND still improving, so a bad recent game
+    # doesn't by itself flag a player at a genuinely in-form club. See
+    # README "Formsteigerung" for the exact definition. None until enough
+    # matchdays exist (needs >= 7: a 5-game window plus a 2-matchday-old
+    # comparison point).
+    team_momentum: Optional[float]
+    opponent_momentum: Optional[float]
 
 
 TeamPointsByMatchday = Dict[Tuple[str, int], float]
@@ -93,6 +103,42 @@ def team_venue_form(
     return mean(team_points[(team_id, md)] for md in matchdays)
 
 
+def build_team_rolling_form_ranks(
+    team_points: TeamPointsByMatchday, all_team_ids: List[str], window: int = TEAM_FORM_WINDOW
+) -> Dict[str, Dict[int, float]]:
+    """For every matchday d where a full trailing `window`-matchday points sum
+    can be formed, ranks all teams that have one (1 = highest sum = best
+    form). Returns {team_id: {matchday: rank}}."""
+    matchdays = sorted({md for (_tid, md) in team_points})
+    ranks: Dict[str, Dict[int, float]] = {tid: {} for tid in all_team_ids}
+    for d in matchdays:
+        window_mds = range(d - window + 1, d + 1)
+        sums = {}
+        for tid in all_team_ids:
+            if all((tid, m) in team_points for m in window_mds):
+                sums[tid] = sum(team_points[(tid, m)] for m in window_mds)
+        if not sums:
+            continue
+        for tid, rk in rank_with_ties(sums, higher_is_better=True).items():
+            ranks[tid][d] = rk
+    return ranks
+
+
+def team_momentum(rolling_form_ranks: Dict[str, Dict[int, float]], team_id: str, trend_gap: int = 2) -> Optional[float]:
+    """"Formsteigerung": aktueller Form-Rang + (aktueller Form-Rang - Form-Rang
+    von vor `trend_gap` Spieltagen). Niedriger = besser UND im Aufwaertstrend."""
+    ranks_for_team = rolling_form_ranks.get(team_id) or {}
+    if not ranks_for_team:
+        return None
+    current_matchday = max(ranks_for_team)
+    previous_matchday = current_matchday - trend_gap
+    if previous_matchday not in ranks_for_team:
+        return None
+    current_rank = ranks_for_team[current_matchday]
+    previous_rank = ranks_for_team[previous_matchday]
+    return current_rank + (current_rank - previous_rank)
+
+
 def next_fixture_for_team(fixtures: List[Fixture], team_id: str) -> Optional[Fixture]:
     upcoming = [
         f for f in fixtures if not f.finished and team_id in (f.home_team_id, f.away_team_id)
@@ -118,6 +164,7 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
     team_points = build_team_points_by_matchday(dataset.players)
     venue = build_venue_map(dataset.fixtures)
     table_by_team: Dict[str, TableEntry] = dataset.table_by_team
+    rolling_form_ranks = build_team_rolling_form_ranks(team_points, list(table_by_team.keys()))
 
     results: Dict[str, PlayerMetrics] = {}
     for player in dataset.players:
@@ -177,6 +224,9 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             o["position"] for o in upcoming_opponents if o["position"] is not None
         ) if upcoming_opponents else None
 
+        own_momentum = team_momentum(rolling_form_ranks, own_team_id) if own_team_id else None
+        opp_momentum = team_momentum(rolling_form_ranks, opponent_id) if opponent_id else None
+
         results[player.id] = PlayerMetrics(
             player=player,
             season_average=season_average,
@@ -197,5 +247,7 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             next_match_is_home=is_home_next,
             upcoming_opponents=upcoming_opponents,
             remaining_schedule_difficulty=remaining_difficulty,
+            team_momentum=own_momentum,
+            opponent_momentum=opp_momentum,
         )
     return results
