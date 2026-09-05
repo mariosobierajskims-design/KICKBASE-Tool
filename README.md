@@ -34,15 +34,21 @@ gebraucht (eigener Kader/Markt einer bestimmten Liga).
 Kickbase-Accounts, die nur über Apple/Google verknüpft sind, haben kein
 Passwort — der dokumentierte Login-Endpoint akzeptiert aber ausschließlich
 Email+Passwort, ein API-Weg für Social-Login ist öffentlich nicht bekannt.
-Falls dein Account so eingerichtet ist (Support-Kontakt nötig, um das zu
-ändern, ist meist kein praktikabler erster Schritt):
+Kickbase hat außerdem **keine Web-App** (nur iOS/Android); `auth.kickbase.com`
+läuft über eine eigene SSO-Instanz (Authentik), nicht über eine normal
+erreichbare Login-Seite. Ein Token lässt sich deshalb nicht per Browser-
+DevTools abgreifen, sondern nur aus dem Netzwerkverkehr der **Handy-App**:
 
-1. In einem Browser auf `web.kickbase.com` einloggen.
-2. Entwicklertools öffnen (F12) → Tab **Netzwerk** → Seite neu laden.
-3. Eine beliebige Anfrage an `api.kickbase.com` anklicken und im Cookie
-   `kkstrauth` oder im `Authorization: Bearer ...`-Header den Token-Wert
-   kopieren.
-4. In `.env` statt `KICKBASE_EMAIL`/`KICKBASE_PASSWORD` eintragen:
+1. Ein HTTPS-Intercepting-Proxy-Tool installieren, z.B.
+   [HTTP Toolkit](https://httptoolkit.com/) (kostenlos, mit eingebauter
+   Anleitung für Android/iOS-Interception) oder alternativ Proxyman/mitmproxy.
+2. Handy gemäß Tool-Anleitung verbinden (Zertifikat installieren, Proxy
+   aktivieren).
+3. Kickbase-App öffnen, eine Aktion ausführen (z.B. Kader öffnen), damit
+   Traffic zu `api.kickbase.com` entsteht.
+4. In einer der Anfragen den `Authorization: Bearer ...`-Header oder das
+   Cookie `kkstrauth` finden und den Wert kopieren.
+5. In `.env` statt `KICKBASE_EMAIL`/`KICKBASE_PASSWORD` eintragen:
    ```
    KICKBASE_AUTH_TOKEN=<kopierter-wert>
    ```
