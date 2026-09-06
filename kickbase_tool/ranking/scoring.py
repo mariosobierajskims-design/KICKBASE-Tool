@@ -114,10 +114,15 @@ def compute_ranking(
 def compute_all_rankings(
     metrics_by_id: Dict[str, PlayerMetrics], weights_path: Path = DEFAULT_WEIGHTS_PATH
 ) -> Dict[str, RankingResult]:
+    """Verletzte/gesperrte/angeschlagene Spieler werden NICHT mehr aus den
+    Rankings ausgeschlossen (frueher ein harter Filter) -- auf Nutzerwunsch
+    fliessen sie ganz normal mit ihren echten Werten ein, damit sie nicht aus
+    Versehen uebersehen werden, falls sie am naechsten Spieltag doch spielen.
+    Der Status bleibt nur eine Anzeige-Spalte; die Entscheidung, ob so ein
+    Spieler trotzdem beruecksichtigt wird, trifft der Nutzer manuell."""
     weights = load_weights(weights_path)
-    eligible = {pid: pm for pid, pm in metrics_by_id.items() if not pm.player.is_unavailable}
     return {
-        "aufstellung": compute_ranking(eligible, AUFSTELLUNG_CATEGORIES, weights.get("aufstellung", {})),
-        "kauf": compute_ranking(eligible, KAUF_CATEGORIES, weights.get("kauf", {})),
-        "verkauf": compute_ranking(eligible, VERKAUF_CATEGORIES, weights.get("verkauf", {}), reverse=True),
+        "aufstellung": compute_ranking(metrics_by_id, AUFSTELLUNG_CATEGORIES, weights.get("aufstellung", {})),
+        "kauf": compute_ranking(metrics_by_id, KAUF_CATEGORIES, weights.get("kauf", {})),
+        "verkauf": compute_ranking(metrics_by_id, VERKAUF_CATEGORIES, weights.get("verkauf", {}), reverse=True),
     }

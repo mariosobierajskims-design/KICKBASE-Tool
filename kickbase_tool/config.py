@@ -56,7 +56,7 @@ def load_settings() -> Settings:
         request_delay_seconds=float(os.environ.get("KICKBASE_REQUEST_DELAY_SECONDS", "0.15")),
         max_workers=int(os.environ.get("KICKBASE_MAX_WORKERS", "6")),
         cache_ttl_volatile_seconds=float(os.environ.get("KICKBASE_CACHE_TTL_VOLATILE", "3600")),
-        cache_ttl_performance_seconds=float(os.environ.get("KICKBASE_CACHE_TTL_PERFORMANCE", "86400")),
+        cache_ttl_performance_seconds=float(os.environ.get("KICKBASE_CACHE_TTL_PERFORMANCE", "3600")),
     )
 
 
