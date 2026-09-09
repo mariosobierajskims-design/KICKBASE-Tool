@@ -106,7 +106,8 @@ def _export_csv(out_dir: Path, ranking_key: str, order: List[str], metrics_by_id
             "rang", "spieler", "position", "team_id", "score",
             "saison_avg", "letzte5_avg", "letzte5_min", "letzte5_max", "letzte5_min_max_avg",
             "marktwert", "punkte_pro_marktwert", "team_form", "gegner_form",
-            "tabellenplatz_diff", "venue_form_diff", "tore", "vorlagen", "zu_null", "status",
+            "tabellenplatz_diff", "own_venue_rank", "opponent_venue_rank", "venue_rank_diff",
+            "gegner_restprogramm", "gegner_formsteigerung", "tore", "vorlagen", "zu_null", "status",
         ])
         for i, pid in enumerate(order):
             pm = metrics_by_id[pid]
@@ -115,7 +116,9 @@ def _export_csv(out_dir: Path, ranking_key: str, order: List[str], metrics_by_id
                 i + 1, p.name, POSITION_LABELS.get(p.position, "?"), p.team_id, round(scores[pid], 3),
                 pm.season_average, pm.recent_form.average, pm.recent_form.minimum, pm.recent_form.maximum,
                 pm.recent_form.min_max_average, pm.market_value, pm.points_per_market_value,
-                pm.team_form, pm.opponent_form, pm.table_position_diff, pm.venue_form_diff,
+                pm.team_form, pm.opponent_form, pm.table_position_diff,
+                pm.own_venue_rank, pm.opponent_venue_rank, pm.venue_rank_diff,
+                pm.opponent_remaining_schedule_difficulty, pm.opponent_momentum,
                 pm.goals, pm.assists, pm.clean_sheets, p.status_text,
             ])
     print(f"CSV geschrieben: {path}")

@@ -1,11 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from kickbase_tool.api import endpoints
 from kickbase_tool.api.cache import JsonFileCache
 from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
 from kickbase_tool.config import Settings
+from kickbase_tool.data import openligadb
 from kickbase_tool.data.models import Fixture, Player, TableEntry
 from kickbase_tool.data.normalize import (
     extract_current_season_performance,
@@ -21,11 +22,24 @@ from kickbase_tool.util import as_list, pick
 
 
 class Dataset:
-    def __init__(self, players: List[Player], table: List[TableEntry], fixtures: List[Fixture]):
+    def __init__(
+        self,
+        players: List[Player],
+        table: List[TableEntry],
+        fixtures: List[Fixture],
+        home_venue_points: Dict[str, float] = None,
+        away_venue_points: Dict[str, float] = None,
+    ):
         self.players = players
         self.table = table
         self.fixtures = fixtures
         self.table_by_team = {t.team_id: t for t in table}
+        # Real official Bundesliga home/away points-per-game (Kennzahl 11),
+        # keyed by Kickbase team_id -- see kickbase_tool/data/openligadb.py.
+        # Empty on any fetch/mapping failure; callers (metrics/calculations.py)
+        # fall back to a Kickbase-internal fantasy-points estimate in that case.
+        self.home_venue_points = home_venue_points or {}
+        self.away_venue_points = away_venue_points or {}
 
 
 def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool = False) -> Dataset:
@@ -50,7 +64,34 @@ def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool
     player_ids_by_team = _fetch_team_rosters(client, settings, cache, table, force_refresh=force_refresh)
     players = _fetch_player_details_and_performance(client, settings, cache, player_ids_by_team, force_refresh=force_refresh)
 
-    return Dataset(players=players, table=table, fixtures=fixtures)
+    home_venue_points, away_venue_points = _fetch_venue_points(cache, settings, table, force_refresh=force_refresh)
+
+    return Dataset(
+        players=players, table=table, fixtures=fixtures,
+        home_venue_points=home_venue_points, away_venue_points=away_venue_points,
+    )
+
+
+def _fetch_venue_points(
+    cache: JsonFileCache, settings: Settings, table: List[TableEntry], force_refresh: bool
+) -> tuple:
+    """Best-effort: any failure (network, unexpected response shape, name-
+    matching mismatch) degrades to empty dicts rather than breaking the whole
+    pipeline -- this is a supplementary data source, not core Kickbase data."""
+    try:
+        matches_raw = cache.get_or_fetch(
+            f"openligadb_matches_{settings.openligadb_league_shortcut}_{settings.openligadb_season}",
+            settings.cache_ttl_volatile_seconds,
+            lambda: openligadb.fetch_matches(settings.openligadb_league_shortcut, settings.openligadb_season),
+            force_refresh=force_refresh,
+        )
+        home_stats, away_stats = openligadb.compute_venue_points(matches_raw)
+        team_name_by_id = {t.team_id: t.team_name for t in table}
+        home_ppg = openligadb.map_shortnames_to_kickbase_ids(openligadb.points_per_game(home_stats), team_name_by_id)
+        away_ppg = openligadb.map_shortnames_to_kickbase_ids(openligadb.points_per_game(away_stats), team_name_by_id)
+        return home_ppg, away_ppg
+    except Exception:
+        return {}, {}
 
 
 def fetch_owned_player_ids(client: KickbaseClient, settings: Settings) -> set:

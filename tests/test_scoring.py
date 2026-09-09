@@ -1,7 +1,7 @@
 from kickbase_tool.data.models import Player
 from kickbase_tool.metrics.calculations import PlayerMetrics
 from kickbase_tool.metrics.fallback import RecentForm
-from kickbase_tool.ranking.scoring import KAUF_CATEGORIES, compute_ranking
+from kickbase_tool.ranking.scoring import AUFSTELLUNG_CATEGORIES, KAUF_CATEGORIES, compute_ranking
 from kickbase_tool.util import rank_with_ties
 
 
@@ -16,10 +16,11 @@ def make_player_metrics(pid, season_avg, market_value, goals=0, assists=0, clean
         player=player, season_average=season_avg, recent_form=recent, market_value=market_value,
         points_per_market_value=(season_avg / market_value) if market_value else None,
         team_form=5.0, opponent_form=5.0, table_position_diff=0.0,
-        own_venue_form=5.0, opponent_venue_form=5.0, venue_form_diff=0.0,
+        own_venue_rank=5.0, opponent_venue_rank=5.0, venue_rank_diff=0.0,
         goals=goals, assists=assists, clean_sheets=clean_sheets,
         next_opponent_team_id="T2", next_opponent_name="Team2", next_match_is_home=True,
         upcoming_opponents=[], remaining_schedule_difficulty=None,
+        opponent_remaining_schedule_difficulty=None,
         team_momentum=None, opponent_momentum=None,
     )
 
@@ -47,14 +48,24 @@ def test_best_season_average_gets_rank_one_in_that_category():
     assert result.order[0] == "a"
 
 
-def test_cheaper_market_value_ranks_better_for_kauf():
+def test_higher_market_value_ranks_better_for_aufstellung():
+    # Direction flipped on explicit user request: a higher market value is a
+    # quality signal for Aufstellung, not a cost to minimize. Aufstellung is
+    # also the only ranking that uses market_value at all (Kauf/Verkauf use
+    # points_per_value instead).
     metrics = {
         "a": make_player_metrics("a", season_avg=10, market_value=5_000_000),
         "b": make_player_metrics("b", season_avg=10, market_value=1_000_000),
     }
-    result = compute_ranking(metrics, KAUF_CATEGORIES, weights={c: 1.0 for c in KAUF_CATEGORIES})
-    assert result.category_ranks["market_value"]["b"] == 1
-    assert result.category_ranks["market_value"]["a"] == 2
+    result = compute_ranking(metrics, AUFSTELLUNG_CATEGORIES, weights={c: 1.0 for c in AUFSTELLUNG_CATEGORIES})
+    assert result.category_ranks["market_value"]["a"] == 1
+    assert result.category_ranks["market_value"]["b"] == 2
+
+
+def test_market_value_is_not_a_kauf_or_verkauf_category():
+    assert "market_value" not in KAUF_CATEGORIES
+    assert "points_per_value" in KAUF_CATEGORIES
+    assert "points_per_value" not in AUFSTELLUNG_CATEGORIES
 
 
 def test_verkauf_reverses_category_ranks():
@@ -72,7 +83,8 @@ def test_verkauf_reverses_category_ranks():
 
 def test_weights_change_final_order():
     metrics = {
-        # a: great season average but very expensive; b: mediocre average but cheap
+        # a: great season average but very expensive (so poor points-per-value);
+        # b: mediocre average but cheap (so much better points-per-value)
         "a": make_player_metrics("a", season_avg=15, market_value=10_000_000),
         "b": make_player_metrics("b", season_avg=8, market_value=500_000),
     }
@@ -80,7 +92,7 @@ def test_weights_change_final_order():
     result_equal = compute_ranking(metrics, KAUF_CATEGORIES, equal_weights)
 
     value_focused_weights = dict(equal_weights)
-    value_focused_weights["market_value"] = 20.0
+    value_focused_weights["points_per_value"] = 20.0
     result_value_focused = compute_ranking(metrics, KAUF_CATEGORIES, value_focused_weights)
 
     assert result_value_focused.order[0] == "b"

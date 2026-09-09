@@ -65,7 +65,9 @@ def build_rows(argv=None) -> list:
             "team_form": pm.team_form,
             "opponent_form": pm.opponent_form,
             "table_position_diff": pm.table_position_diff,
-            "venue_form_diff": pm.venue_form_diff,
+            "own_venue_rank": pm.own_venue_rank,
+            "opponent_venue_rank": pm.opponent_venue_rank,
+            "venue_rank_diff": pm.venue_rank_diff,
             "next_opponent_name": pm.next_opponent_name,
             "next_match_is_home": pm.next_match_is_home,
             "upcoming_opponents": [
@@ -73,6 +75,7 @@ def build_rows(argv=None) -> list:
                 for o in pm.upcoming_opponents
             ],
             "remaining_schedule_difficulty": pm.remaining_schedule_difficulty,
+            "opponent_remaining_schedule_difficulty": pm.opponent_remaining_schedule_difficulty,
             "team_momentum": pm.team_momentum,
             "opponent_momentum": pm.opponent_momentum,
             "goals": pm.goals,

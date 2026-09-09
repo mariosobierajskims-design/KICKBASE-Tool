@@ -11,23 +11,48 @@
 # zwischen den Kategorien zaehlt. Frei anpassbar, ohne Code aendern zu muessen.
 #
 # Kategorie-Schluessel (entsprechen den Kennzahlen aus der Aufgabenstellung):
-#   season_avg                 (1)  Punkte-Durchschnitt Saison
-#   recent_avg                 (2)  Punkte-Durchschnitt letzte 5 Spiele (mit Fallback)
-#   recent_min                 (3)  Minimum letzte 5 Spiele
-#   recent_max                 (4)  Maximum letzte 5 Spiele
-#   recent_min_max_avg         (5)  Durchschnitt aus Min/Max
-#   market_value                (6)  Aktueller Marktwert (nur Kauf/Verkauf)
-#   points_per_value            (7)  Punkte pro Marktwert (nur Kauf/Verkauf)
-#   team_form                   (8)  Team-Form (letzte 5 Spiele)
-#   opponent_form                (9)  Gegner-Form (naechster Spieltag)
-#   table_position_diff         (10) Tabellenplatz-Differenz zum naechsten Gegner
-#   venue_form_diff              (11) Heim/Auswaerts-adjustierte Staerke-Differenz
-#   goals_assists_cleansheets     (12) Tore/Vorlagen/zu-Null (kombiniert, intern 90:35:20 gewichtet)
+#   season_avg                          (1)  Punkte-Durchschnitt Saison
+#   recent_avg                          (2)  Punkte-Durchschnitt letzte 5 Spiele (mit Fallback)
+#   recent_min                          (3)  Minimum letzte 5 Spiele
+#   recent_max                          (4)  Maximum letzte 5 Spiele
+#   recent_min_max_avg                  (5)  Durchschnitt aus Min/Max
+#   market_value                        (6)  Aktueller Marktwert (nur Aufstellung -- hoeher = besser)
+#   points_per_value                    (7)  Punkte pro Marktwert (nur Kauf/Verkauf)
+#   team_form                           (8)  Team-Form (letzte 5 Spiele)
+#   opponent_form                       (9)  Gegner-Form (naechster Spieltag)
+#   table_position_diff                 (10) Tabellenplatz-Differenz zum naechsten Gegner --
+#                                             NICHT die offizielle Bundesliga-Tabelle, sondern
+#                                             eine selbst gebaute "Form-Tabelle" (alle 18 Teams
+#                                             nach ihrem eigenen team_form-Wert gerankt)
+#   own_venue_rank                      (11a) Rang des EIGENEN Teams in der Heim- bzw.
+#                                             Auswaerts-Tabelle (je nachdem wo das naechste
+#                                             Spiel stattfindet). 1 = staerkstes Team dort.
+#   opponent_venue_rank                 (11b) Rang des GEGNERS in der jeweils fuer ihn
+#                                             passenden Tabelle (Heim, wenn er Heimrecht hat,
+#                                             sonst Auswaerts)
+#   venue_rank_diff                     (11c) Differenz der beiden Raenge oben (groesster
+#                                             Unterschied = beste Punktzahl)
+#   goals_assists_cleansheets           (12) Tore/Vorlagen/zu-Null (kombiniert, intern 90:35:20 gewichtet)
+#   opponent_remaining_schedule_difficulty (Gegner-Restprogramm) Ø Tabellenplatz der naechsten
+#                                             5 Gegner DES GEGNERS -- schweres Restprogramm fuer
+#                                             ihn wird als gut fuer unseren Spieler gewertet
+#   opponent_momentum                   (Gegner-Formsteigerung) Formsteigerung des Gegners --
+#                                             ein schwacher/abfallender Gegner ist gut fuer uns
+#
+# Datenquelle fuer own_venue_rank/opponent_venue_rank/venue_rank_diff: echte
+# offizielle Bundesliga-Heim/Auswaerts-Punkte-pro-Spiel ueber die freie
+# OpenLigaDB-API (kicker.de ist aus dieser Umgebung per Egress-Proxy
+# blockiert; OpenLigaDB liefert dieselben offiziellen Ergebnisse als JSON,
+# siehe kickbase_tool/data/openligadb.py). Faellt automatisch auf eine
+# Kickbase-interne Fantasy-Punkte-Schaetzung zurueck, falls der Abruf mal
+# fehlschlaegt oder ein Verein sich nicht zuordnen laesst.
 #
 # Kennzahl 14 (Verletzt/Gesperrt) ist kein Rang-Kriterium, sondern ein harter
 # Ausschlussfilter -- betroffene Spieler tauchen in keinem der drei Rankings auf.
-# Kennzahl 13 (Startelf-Wahrscheinlichkeit) und 15 (Restprogramm-Schwierigkeit)
-# sind auf Nutzerwunsch nicht Teil der Rankings (kommen im echten Sheet nicht vor).
+# Kennzahl 13 (Startelf-Wahrscheinlichkeit) ist auf Nutzerwunsch weiterhin nicht
+# Teil der Rankings. Kennzahl 15 (Restprogramm-Schwierigkeit) ist fuer das
+# EIGENE Team weiterhin nur eine Info-Spalte, fliesst aber fuer den GEGNER als
+# eigene Kategorie (opponent_remaining_schedule_difficulty) mit ein.
 
 aufstellung:
   season_avg: 0.2
@@ -38,8 +63,13 @@ aufstellung:
   team_form: 0.095
   opponent_form: 0.045
   table_position_diff: 1.0
-  venue_form_diff: 0.185
+  own_venue_rank: 0.09
+  opponent_venue_rank: 0.09
+  venue_rank_diff: 0.185
   goals_assists_cleansheets: 0.2
+  opponent_remaining_schedule_difficulty: 0.045
+  opponent_momentum: 0.045
+  market_value: 0.2
 
 kauf:
   season_avg: 0.2
@@ -47,13 +77,16 @@ kauf:
   recent_min: 1.0
   recent_max: 1.0
   recent_min_max_avg: 1.0
-  market_value: 1.0
   points_per_value: 0.15
   team_form: 0.1
   opponent_form: 0.05
   table_position_diff: 1.0
-  venue_form_diff: 0.05
+  own_venue_rank: 0.025
+  opponent_venue_rank: 0.025
+  venue_rank_diff: 0.05
   goals_assists_cleansheets: 0.15
+  opponent_remaining_schedule_difficulty: 0.05
+  opponent_momentum: 0.05
 
 verkauf:
   season_avg: 0.35
@@ -61,10 +94,13 @@ verkauf:
   recent_min: 1.0
   recent_max: 1.0
   recent_min_max_avg: 1.0
-  market_value: 1.0
   points_per_value: 0.175
   team_form: 0.1
   opponent_form: 1.0
   table_position_diff: 1.0
-  venue_form_diff: 1.0
+  own_venue_rank: 0.5
+  opponent_venue_rank: 0.5
+  venue_rank_diff: 1.0
   goals_assists_cleansheets: 0.1
+  opponent_remaining_schedule_difficulty: 1.0
+  opponent_momentum: 1.0

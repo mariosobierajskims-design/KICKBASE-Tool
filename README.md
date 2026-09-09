@@ -6,7 +6,10 @@ Rankings: **Aufstellung**, **Kauf**, **Verkauf**.
 
 > Nutzt die unveröffentlichte Kickbase-API. Nicht offiziell unterstützt, kann
 > jederzeit ohne Vorwarnung von Kickbase geändert werden. Nur für den
-> persönlichen Gebrauch.
+> persönlichen Gebrauch. Kennzahl 11 (Heim/Auswärts) ruft zusätzlich die
+> freie [OpenLigaDB](https://www.openligadb.de/)-API für echte offizielle
+> Bundesliga-Ergebnisse ab (kein API-Key nötig, siehe "Heim/Auswärts-
+> Datenquelle" unten).
 
 ## Setup
 
@@ -84,28 +87,69 @@ eigene Kopie über `--weights` übergeben — kein Code-Änderung nötig.
 3. Minimum letzte 5 Spiele (gleiche Fallback-Logik)
 4. Maximum letzte 5 Spiele (gleiche Fallback-Logik)
 5. Ø aus Min/Max
-6. Aktueller Marktwert
-7. Punkte pro Marktwert (Effizienz)
+6. Aktueller Marktwert — **nur Aufstellung**, höher = besser (Qualitätssignal)
+7. Punkte pro Marktwert (Effizienz) — **nur Kauf/Verkauf**
 8. Team-Form: Ø Team-Punkte der letzten 5 Spiele
 9. Gegner-Form: gleiche Kennzahl für den nächsten Gegner
-10. Tabellenplatz-Differenz zum nächsten Gegner
-11. Heim/Auswärts-adjustierte Stärke-Differenz zum nächsten Gegner
+10. Tabellenplatz-Differenz zum nächsten Gegner — basiert NICHT auf der
+    offiziellen Bundesliga-Tabelle, sondern auf einer selbst gebauten
+    "Form-Tabelle" (alle 18 Teams nach ihrem eigenen Kennzahl-8-Wert gerankt)
+11. Heim/Auswärts-Stärke zum nächsten Gegner (echte offizielle Bundesliga-
+    Ergebnisse via OpenLigaDB, siehe unten), aufgeteilt in 3 einzeln
+    gewichtete Spalten: Rang des eigenen Teams, Rang des Gegners (jeweils in
+    der für sie zutreffenden Heim- bzw. Auswärts-Tabelle), und die Differenz
+    daraus
 12. Tore, Vorlagen, zu-Null-Spiele (eine kombinierte Rang-Kategorie, intern
     90:35:20 gewichtet — siehe unten)
 14. Verletzt/Gesperrt-Flag (Filter, kein Rang-Kriterium)
+15. Restprogramm-Schwierigkeit **des nächsten Gegners** (Ø Tabellenplatz seiner
+    nächsten 5 Gegner) — ein schweres Restprogramm für ihn gilt als gut für
+    unseren Spieler. Fürs **eigene** Team bleibt dieselbe Kennzahl nur eine
+    Info-Spalte, kein Rang-Kriterium.
+16. Formsteigerung **des nächsten Gegners** (siehe "Formsteigerung" unten) —
+    ein schwacher/abfallender Gegner gilt als gut für unseren Spieler.
 
-Kennzahlen 13 (Startelf-Wahrscheinlichkeit) und 15 (Restprogramm-Schwierigkeit)
-aus der ursprünglichen Aufgabenstellung sind auf ausdrücklichen Wunsch **nicht**
-Teil der Rankings — sie kommen im echten Gewichtungs-Sheet des Nutzers nicht vor
-(siehe "Live-Stand der Feldnamen" unten). Kennzahl 14 ist ein
-**Ausschlussfilter**: betroffene Spieler tauchen in keinem der drei Rankings
-auf (harte Filterung, kein Soft-Ranking). In die gewichtete Rang-Mittelung
-fließen deshalb 10 Kategorien (Aufstellung) bzw. 12 Kategorien (Kauf/Verkauf) ein.
+Kennzahl 13 (Startelf-Wahrscheinlichkeit) aus der ursprünglichen
+Aufgabenstellung ist auf ausdrücklichen Wunsch weiterhin **nicht** Teil der
+Rankings. Kennzahl 14 ist ein **Ausschlussfilter**: betroffene Spieler tauchen
+in keinem der drei Rankings auf (harte Filterung, kein Soft-Ranking). In die
+gewichtete Rang-Mittelung fließen deshalb 14 Kategorien (Aufstellung) bzw.
+14 Kategorien (Kauf/Verkauf, mit Punkte-pro-Marktwert statt Marktwert) ein —
+siehe `kickbase_tool/ranking/scoring.py:BASE_CATEGORIES`.
 
-**Verkauf** verwendet dieselben Kategorien wie **Kauf** (Marktwert weiterhin
-ausgeschlossen bei Aufstellung), aber mit umgekehrter Rangfolge je Kategorie
-(Rang 1 in "Kauf" wird zu Rang N in "Verkauf" und umgekehrt) und einer eigenen,
-deutlich stärker auf Saison-Ø fokussierten Gewichtung (siehe `weights.yaml`).
+**Verkauf** verwendet dieselben Kategorien wie **Kauf**, aber mit umgekehrter
+Rangfolge je Kategorie (Rang 1 in "Kauf" wird zu Rang N in "Verkauf" und
+umgekehrt) und einer eigenen, deutlich stärker auf Saison-Ø fokussierten
+Gewichtung (siehe `weights.yaml`).
+
+### Heim/Auswärts-Datenquelle (Kennzahl 11)
+
+Verwendet die **echten offiziellen** Bundesliga-Heim/Auswärts-Ergebnisse, wie
+gewünscht — allerdings nicht von kicker.de (aus dieser Entwicklungsumgebung
+per Egress-Proxy blockiert, sowohl direkt als auch über den WebFetch-Weg),
+sondern von der freien [OpenLigaDB](https://www.openligadb.de/)-API
+(`kickbase_tool/data/openligadb.py`): echte Spielergebnisse pro Spieltag,
+daraus selbst berechnete Liga-Punkte (3/1/0) getrennt nach Heim- und
+Auswärtsspielen, macht Punkte-pro-Spiel je Team und Spielort.
+
+Ein erster Abgleich (season "2025" = Saison 2025/26) zeigte einen 3-Team-
+Unterschied zum Kickbase-Kader (Elversberg/Paderborn/Schalke bei Kickbase
+statt Heidenheim/St. Pauli/Wolfsburg). Season "2026" (2026/27, die laut
+Kickbase-Tabelle aktuell laufende Saison) stimmt dagegen **exakt** mit allen
+18 Kickbase-Teams überein (bestätigt live 2026-09-09). OpenLigaDB benennt
+Saisons nach ihrem Startjahr; falls die von Kickbase getrackte Saison sich
+mal ändert, per `KICKBASE_BL_SEASON` in `.env` anpassbar (Default: aktuelles
+Jahr, vor Juli automatisch das Vorjahr).
+
+3 Vereinsnamen unterscheiden sich zwischen den beiden Quellen und werden über
+eine kleine Alias-Tabelle gemappt (`openligadb.TEAM_NAME_ALIASES`): Schalke
+(Kickbase) ↔ S04 (OpenLigaDB-Kurzname), Hamburg ↔ HSV, M'gladbach ↔ Gladbach.
+
+Schlägt der OpenLigaDB-Abruf fehl (Netzwerk) oder lässt sich ein Verein nicht
+zuordnen, fällt das Tool automatisch auf eine Kickbase-interne
+Fantasy-Punkte-Schätzung zurück (dieselbe Quelle, die vorher `venue_form_diff`
+nutzte) — siehe `build_team_venue_ranks` in
+`kickbase_tool/metrics/calculations.py`.
 
 ## Fallback-Logik für "letzte 5 Spiele" (Kennzahl 2-4)
 
@@ -136,11 +180,15 @@ Bewertungssystem, abgeglichen am 2026-09-05). Vorgehen:
 - Das Sheet selbst rankt nur unter einer kuratierten Wunschliste (~25 Spieler);
   auf ausdrücklichen Wunsch ranken die 3 Tool-Rankings stattdessen über den
   **kompletten** Bundesliga-Pool.
-- Zwei Abweichungen der Sheet-Formeln von der ursprünglichen Aufgabenstellung
-  wurden bewusst **nicht** übernommen: Verkauf verwendet weiterhin die volle
+- Eine Abweichung der Sheet-Formeln von der ursprünglichen Aufgabenstellung
+  wurde bewusst **nicht** übernommen: Verkauf verwendet weiterhin die volle
   Kauf-Kategorienliste (nur umgekehrt), statt der im Sheet enger gefassten
-  Auswahl; Marktwert/PPM bleiben bei Aufstellung ausgeschlossen, obwohl das
-  Sheet PPM dort mitgewichtet.
+  Auswahl.
+- Marktwert/Punkte-pro-Marktwert wurden auf spätere ausdrückliche Anweisung
+  neu aufgeteilt: Marktwert (höher = besser) zählt nur noch bei Aufstellung,
+  Punkte-pro-Marktwert nur noch bei Kauf/Verkauf (ursprünglich war Marktwert
+  bei Kauf/Verkauf mit "günstiger = besser" gewichtet und bei Aufstellung
+  komplett ausgeschlossen).
 
 ## Live-Stand der Feldnamen
 
@@ -191,17 +239,37 @@ unten), nicht nur geraten. Wichtigste bestätigte Erkenntnisse:
   dafür gefunden. Wie abgestimmt aus der Summe der tatsächlichen
   Kickbase-Punkte aller Spieler eines Teams an einem Spieltag abgeleitet
   (`build_team_points_by_matchday` in `kickbase_tool/metrics/calculations.py`).
-- **Tabellenplatz-Differenz** (Kennzahl 10): `Tabellenplatz(Gegner) −
-  Tabellenplatz(eigenes Team)`. Positiv = eigenes Team besser platziert
-  (Favoritenrolle). Höherer Wert zählt als "besser" für den Spieler.
+- **Tabellenplatz-Differenz** (Kennzahl 10): Auf ausdrücklichen Nutzerwunsch
+  NICHT `Tabellenplatz(Gegner) − Tabellenplatz(eigenes Team)` aus der
+  offiziellen Tabelle, sondern `Form-Rang(Gegner) − Form-Rang(eigenes Team)`
+  aus einer selbst gebauten "Form-Tabelle" (alle 18 Teams nach ihrem eigenen
+  Kennzahl-8-Wert gerankt, `build_form_table_ranks` in `calculations.py`).
+  Positiv = eigenes Team in der Form-Tabelle besser platziert (Favoritenrolle).
+  Höherer Wert zählt als "besser" für den Spieler.
+- **Heim/Auswärts** (Kennzahl 11): Auf ausdrücklichen Nutzerwunsch in 3 Spalten
+  aufgeteilt (`own_venue_rank`/`opponent_venue_rank`/`venue_rank_diff`,
+  `build_team_venue_ranks` in `calculations.py`) statt einer kombinierten
+  Differenz, jetzt auf Basis echter offizieller Bundesliga-Ergebnisse (siehe
+  "Heim/Auswärts-Datenquelle" oben), mit Kickbase-interner Fantasy-Punkte-
+  Schätzung als Fallback.
+- **Gegner-Restprogramm und Gegner-Formsteigerung** (Kennzahl 15/16, neu auf
+  ausdrücklichen Nutzerwunsch): dieselbe Berechnung wie fürs eigene Team,
+  aber für den nächsten Gegner. Ein schweres Restprogramm bzw. eine schwache/
+  abfallende Form des Gegners gilt jeweils als gut für unseren Spieler
+  (`opponent_remaining_schedule_difficulty`/`opponent_momentum` in
+  `PlayerMetrics`).
 - **Kennzahl 12** bündelt 3 Rohwerte in einer Rang-Kategorie: jeder Rohwert
   wird einzeln über den Spielerpool gerankt, die drei Ränge werden 90:35:20
   (Tore:Vorlagen:Zu-Null) gewichtet kombiniert — Gewichte aus dem Nutzer-Sheet
   übernommen (`_combined_goals_assists_cleansheets_rank` in `ranking/scoring.py`).
-- **Marktwert-Richtung** (Kennzahl 6): Für "Kauf" gilt günstiger = besser
-  (Budget-Effizienz). Interpretationsentscheidung, in
+- **Marktwert-Richtung** (Kennzahl 6): Auf ausdrücklichen Nutzerwunsch gilt
+  jetzt höher = besser (Marktwert als Qualitätssignal), und die Kategorie
+  zählt nur noch bei Aufstellung — Kauf/Verkauf nutzen stattdessen Punkte pro
+  Marktwert (Kennzahl 7). Ursprünglich (bis 2026-09-09) galt für Kauf/Verkauf
+  günstiger = besser (Budget-Effizienz) bei gleichzeitigem Ausschluss aus
+  Aufstellung — beides in
   `kickbase_tool/ranking/scoring.py:CATEGORY_DEFINITIONS["market_value"]`
-  mit einem Flag umkehrbar.
+  bzw. `AUFSTELLUNG_CATEGORIES`/`KAUF_CATEGORIES` weiterhin leicht umkehrbar.
 - **Gewichte pro Kategorie**: aus dem Nutzer-Sheet übernommen, siehe Abschnitt
   "Herkunft der Gewichte" oben.
 - **Sehr früh in der Saison** (z.B. Spieltag 2) haben viele Spieler noch kaum

@@ -1,11 +1,20 @@
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _default_bundesliga_season() -> str:
+    """OpenLigaDB seasons are named by the year they START (e.g. "2026" =
+    2026/27) -- Bundesliga seasons start in ~August, so before July the
+    previous year's season is still the current one."""
+    now = datetime.now(timezone.utc)
+    return str(now.year if now.month >= 7 else now.year - 1)
 
 
 @dataclass(frozen=True)
@@ -20,6 +29,13 @@ class Settings:
     max_workers: int
     cache_ttl_volatile_seconds: float
     cache_ttl_performance_seconds: float
+    # Kennzahl 11 (Heim/Auswaerts): real official Bundesliga home/away tables
+    # come from the free OpenLigaDB API (kickbase_tool/data/openligadb.py),
+    # not from Kickbase itself. See that module's docstring for why the
+    # season parameter matters (must match Kickbase's currently tracked
+    # real-world season) and how to override it if it ever drifts.
+    openligadb_league_shortcut: str
+    openligadb_season: str
 
 
 def load_settings() -> Settings:
@@ -57,6 +73,8 @@ def load_settings() -> Settings:
         max_workers=int(os.environ.get("KICKBASE_MAX_WORKERS", "6")),
         cache_ttl_volatile_seconds=float(os.environ.get("KICKBASE_CACHE_TTL_VOLATILE", "3600")),
         cache_ttl_performance_seconds=float(os.environ.get("KICKBASE_CACHE_TTL_PERFORMANCE", "3600")),
+        openligadb_league_shortcut=os.environ.get("KICKBASE_OPENLIGADB_LEAGUE", "bl1"),
+        openligadb_season=os.environ.get("KICKBASE_BL_SEASON", _default_bundesliga_season()),
     )
 
 

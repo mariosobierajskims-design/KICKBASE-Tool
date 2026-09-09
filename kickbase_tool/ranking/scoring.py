@@ -19,20 +19,45 @@ CATEGORY_DEFINITIONS = {
     "recent_min": (lambda pm: pm.recent_form.minimum, True),
     "recent_max": (lambda pm: pm.recent_form.maximum, True),
     "recent_min_max_avg": (lambda pm: pm.recent_form.min_max_average, True),
-    "market_value": (lambda pm: pm.market_value, False),  # cheaper = better value for a buyer
+    # Direction flipped on explicit user request: a higher market value is now
+    # treated as a quality signal (proven/expensive player), not a cost to
+    # minimize. Only used for Aufstellung -- Kauf/Verkauf use points_per_value
+    # instead (see AUFSTELLUNG/KAUF_CATEGORIES below).
+    "market_value": (lambda pm: pm.market_value, True),
     "points_per_value": (lambda pm: pm.points_per_market_value, True),
     "team_form": (lambda pm: pm.team_form, True),
     "opponent_form": (lambda pm: pm.opponent_form, False),  # weaker opponent = better for the player
     "table_position_diff": (lambda pm: pm.table_position_diff, True),
-    "venue_form_diff": (lambda pm: pm.venue_form_diff, True),
+    # Heim/Auswaerts (Kennzahl 11), split into 3 independent categories on
+    # explicit user request -- see PlayerMetrics.own_venue_rank for the
+    # data-source caveat (Kickbase-internal fantasy points, not an official
+    # real-world home/away table).
+    "own_venue_rank": (lambda pm: pm.own_venue_rank, False),  # own team's rank at that venue: 1 = best
+    "opponent_venue_rank": (lambda pm: pm.opponent_venue_rank, True),  # opponent's rank: weak (high number) = better for us
+    "venue_rank_diff": (lambda pm: pm.venue_rank_diff, True),
+    # Next-opponent categories beyond opponent_form, added on explicit user
+    # request: a tougher remaining schedule for the opponent (numerically
+    # LOW avg upcoming-opponent table position = strong future opponents for
+    # them) is assumed good for our player, mirroring opponent_form's "weaker
+    # opponent = better" convention.
+    "opponent_remaining_schedule_difficulty": (lambda pm: pm.opponent_remaining_schedule_difficulty, False),
+    # A weak/declining opponent (high raw momentum value) is good for us --
+    # inverse of team_momentum's own "lower = stronger and rising" meaning.
+    "opponent_momentum": (lambda pm: pm.opponent_momentum, True),
 }
 
-AUFSTELLUNG_CATEGORIES = [
+# Shared by all three rankings; Aufstellung adds market_value (see below),
+# Kauf/Verkauf add points_per_value instead (on explicit user request: for
+# Kauf/Verkauf the "value" signal is points-per-money, not raw market value).
+BASE_CATEGORIES = [
     "season_avg", "recent_avg", "recent_min", "recent_max", "recent_min_max_avg",
-    "team_form", "opponent_form", "table_position_diff", "venue_form_diff",
+    "team_form", "opponent_form", "table_position_diff",
+    "own_venue_rank", "opponent_venue_rank", "venue_rank_diff",
     "goals_assists_cleansheets",
+    "opponent_remaining_schedule_difficulty", "opponent_momentum",
 ]
-KAUF_CATEGORIES = AUFSTELLUNG_CATEGORIES + ["market_value", "points_per_value"]
+AUFSTELLUNG_CATEGORIES = BASE_CATEGORIES + ["market_value"]
+KAUF_CATEGORIES = BASE_CATEGORIES + ["points_per_value"]
 VERKAUF_CATEGORIES = KAUF_CATEGORIES
 
 
