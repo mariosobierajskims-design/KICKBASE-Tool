@@ -16,12 +16,15 @@ DEFAULT_CONFIG_PATH = Path(__file__).with_name("bidding_config.yaml")
 # (z.B. nur "attractiveness.start_probability") den Rest nicht zerstoert.
 DEFAULTS: Dict[str, Any] = {
     # Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
-    # (scoring.py). Groessenordnung ist relativ zueinander, nicht absolut.
+    # (scoring.py). Auf ausdruecklichen Nutzerwunsch alle vier Faktoren GLEICH
+    # gewichtet (PKT/MIO-Effizienz verliert bei hohem Marktwert zusaetzlich an
+    # Gewicht ueber ppm_efficiency_fade_* -- separate Modulation, keine
+    # Abweichung von der Gleichgewichtung).
     "attractiveness": {
-        "start_probability_weight": 3.0,
-        "rank_tier_weight": 1.8,
-        "ppm_efficiency_weight": 1.2,
-        "market_value_trend_weight": 0.5,
+        "start_probability_weight": 1.0,
+        "rank_tier_weight": 1.0,
+        "ppm_efficiency_weight": 1.0,
+        "market_value_trend_weight": 1.0,
     },
     # Rang-Baender aus der Aufgabenstellung (Rang 1-20 potenzieller ALL-IN, ...).
     "rank_tiers": [
@@ -60,26 +63,21 @@ DEFAULTS: Dict[str, Any] = {
     # empfohlen (siehe pricing.py).
     "no_bid_score_threshold": 0.30,
     "no_bid_overpay_pct_threshold": 1.0,
-    # Ab wie vielen effektiv gewichteten aehnlichen Transfers die empirische
-    # Liga-Kalibrierung voll (statt nur teilweise) das regelbasierte
-    # Grundmodell ueberschreiben darf.
-    "similar_transfers_target_n": 12,
-    "similar_transfers_max_k": 20,
-    # Maximale gewichtete Distanz (similarity.py), ab der ein Transfer nicht
-    # mehr als "aehnlich" gilt. Empirisch aus der Distanzverteilung ueber
-    # viele Spieler-/Transfer-Paare ermittelt (Median ~0.63, unterstes Quartil
-    # ~0.5) -- der fruehere Wert 1.0 war wirkungslos, siehe similarity.py.
-    "similarity_max_distance": 0.50,
-    # Distanz-Gewichte fuer similarity.py (je kleiner die gewichtete Distanz,
-    # desto aehnlicher der historische Transfer).
-    "similarity_weights": {
-        "market_value_log": 1.4,
-        "rank_tier": 1.1,
-        "start_probability": 1.3,
-        "ppm": 0.8,
-        "market_value_trend_pct": 0.6,
-        "position": 0.5,
-    },
+    # "Vergleichbar" (similarity.py) ist explizit hart auf zwei Kriterien
+    # reduziert: Marktwertfenster (similarity_mv_window_pct) + gleiche
+    # Position. Von den Treffern zaehlen nur die zeitlich juengsten max_k
+    # ("die letzten zehn vergleichbaren Transfers", rein chronologisch sortiert
+    # statt nach Aehnlichkeit) -- haelt das Modell aktuell und stabil gegen
+    # einzelne neue Ausreisser. target_n = max_k, weil das Fenster bei zehn
+    # Treffern voll "eingeschwungen" ist.
+    "similar_transfers_target_n": 10,
+    "similar_transfers_max_k": 10,
+    # Marktwertfenster je Marktwertklasse (market_value_classes) in Prozent
+    # des Zielmarktwerts: eng bei niedrigem Marktwert, weit bei hohem
+    # Marktwert (siehe Modul-Docstring similarity.py). Ersetzt die fruehere
+    # gewichtete Distanz ueber Rang/Startchance/PPM/Trend -- diese fliessen
+    # nicht mehr in die Vergleichbarkeit ein.
+    "similarity_mv_window_pct": [15, 20, 25, 30, 40, 50, 60, 75],
     # Zeitgewichtung (Tage seit Transfer -> Gewicht) fuer calibration.py +
     # similarity.py, aus der Aufgabenstellung uebernommen (7 Tage stark, 8-21
     # Tage mittel, aelter schwach).

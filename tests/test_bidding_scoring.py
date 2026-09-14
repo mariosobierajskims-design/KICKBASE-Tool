@@ -58,11 +58,14 @@ def test_reggiani_capped_below_will_haben_despite_strong_trend():
     assert result["category"] == CATEGORY_UEBER_MARKTWERT
 
 
-def test_schlotterbeck_reaches_all_in_despite_low_ppm_efficiency():
+def test_schlotterbeck_reaches_will_haben_despite_low_ppm_efficiency():
     # Starker Rang, sichere Startchance, hoher Marktwert mit unterdurch-
-    # schnittlicher PKT/MIO-Effizienz -- soll trotzdem ALL IN erreichen, weil
-    # absolute sportliche Qualitaet bei teuren Topspielern schwerer wiegt als
-    # maximale Kapitaleffizienz (siehe Aufgabenstellung).
+    # schnittlicher PKT/MIO-Effizienz. Seit die vier Attraktivitaets-Faktoren
+    # auf ausdruecklichen Nutzerwunsch GLEICH gewichtet sind (vorher war
+    # Startchance/Rang deutlich staerker gewichtet als PKT/MIO), zieht die
+    # schwache Effizienz den Score knapp unter die ALL-IN-Schwelle -- WILL_HABEN
+    # statt ALL_IN, aber weiterhin klar nicht in eine niedrigere Kategorie
+    # (absolute sportliche Qualitaet zaehlt trotzdem noch spuerbar).
     row = {
         "market_value": 35_000_000, "market_value_change_day": 0,
         "kauf_rank": 15, "start_probability": 1,
@@ -70,7 +73,7 @@ def test_schlotterbeck_reaches_all_in_despite_low_ppm_efficiency():
         "season_avg": 8.0, "status": "fit",
     }
     result = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
-    assert result["category"] == CATEGORY_ALL_IN
+    assert result["category"] == CATEGORY_WILL_HABEN
 
 
 def test_dinkci_style_player_is_not_dragged_down_by_bad_rank_alone():

@@ -4,9 +4,11 @@ sinnvolle Ergebnisse zu liefern (siehe Aufgabenstellung "Cold Start") --
 pricing.py mischt diesen regelbasierten Score erst in einem zweiten Schritt
 mit der empirischen Liga-Kalibrierung.
 
-Startwahrscheinlichkeit ist mit Abstand am staerksten gewichtet (explizite
-Vorgabe), gefolgt vom Rang-Tier, dann PKT/MIO-Effizienz (deren Gewicht mit
-steigendem Marktwert bewusst sinkt) und zuletzt dem Marktwert-Trend."""
+Alle vier Faktoren sind explizit GLEICH gewichtet (Nutzervorgabe) -- einzige
+Ausnahme ist die PKT/MIO-Effizienz, deren Gewicht mit steigendem Marktwert
+weiterhin bewusst sinkt (siehe ppm_efficiency_weight/Schlotterbeck-Beispiel),
+das ist eine separate, marktwertabhaengige Modulation und keine Abweichung
+von der Gleichgewichtung der vier Basisfaktoren."""
 from typing import Dict, List, Optional
 
 CATEGORY_ALL_IN = "all_in"

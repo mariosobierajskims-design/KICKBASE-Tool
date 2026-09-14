@@ -1,6 +1,5 @@
 from kickbase_tool.bidding.config import load_bidding_config
 from kickbase_tool.bidding.scoring import (
-    CATEGORY_ALL_IN,
     CATEGORY_MARKTWERT,
     CATEGORY_UEBER_MARKTWERT,
     CATEGORY_WILL_HABEN,
@@ -83,7 +82,13 @@ def test_weak_marktwert_player_recommends_no_bid():
     assert result["overpay_pct"] is None
 
 
-def test_all_in_player_cold_start_produces_positive_overpay_above_market_value():
+def test_top_player_cold_start_produces_positive_overpay_above_market_value():
+    # Mit gleichgewichtetem Attraktivitaets-Score (Nutzervorgabe) landet dieser
+    # Spieler (starker Rang/Startchance, aber unterdurchschnittliche PKT/MIO-
+    # Effizienz bei hohem Marktwert) in WILL_HABEN statt ALL_IN -- siehe
+    # test_bidding_scoring.test_schlotterbeck_reaches_will_haben_despite_low_ppm_efficiency.
+    # Die eigentliche Aussage dieses Tests (positiver Overpay ueber Marktwert,
+    # korrekt geordnete Gebotsspanne) ist davon unberuehrt.
     row = {
         "market_value": 35_000_000, "market_value_change_day": 0,
         "kauf_rank": 15, "start_probability": 1,
@@ -91,7 +96,7 @@ def test_all_in_player_cold_start_produces_positive_overpay_above_market_value()
         "season_avg": 8.0, "status": "fit",
     }
     attr = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
-    assert attr["category"] == CATEGORY_ALL_IN
+    assert attr["category"] == CATEGORY_WILL_HABEN
 
     result = recommend_bid(
         {"market_value": row["market_value"]}, attr, None, None, NEUTRAL_MARKET_FACTOR, CONFIG

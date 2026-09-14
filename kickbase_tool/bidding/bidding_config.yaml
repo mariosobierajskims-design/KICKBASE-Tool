@@ -9,13 +9,15 @@
 # wie sich das Modell in deiner Liga verhaelt, ohne Python-Code zu beruehren.
 
 # Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
-# (kickbase_tool/bidding/scoring.py). Groessenordnung ist relativ zueinander.
-# Startwahrscheinlichkeit ist auf ausdruecklichen Wunsch der wichtigste Faktor.
+# (kickbase_tool/bidding/scoring.py). Auf ausdruecklichen Nutzerwunsch alle
+# vier Faktoren GLEICH gewichtet (die PKT/MIO-Effizienz verliert bei hohem
+# Marktwert trotzdem zusaetzlich an Gewicht, siehe ppm_efficiency_fade_* --
+# das ist eine separate Modulation, keine Abweichung von der Gleichgewichtung).
 attractiveness:
-  start_probability_weight: 3.0
-  rank_tier_weight: 1.8
-  ppm_efficiency_weight: 1.2
-  market_value_trend_weight: 0.5
+  start_probability_weight: 1.0
+  rank_tier_weight: 1.0
+  ppm_efficiency_weight: 1.0
+  market_value_trend_weight: 1.0
 
 # Rang-Baender aus der Aufgabenstellung: Rang 1-20 potenzieller ALL-IN-Spieler,
 # 21-50 sehr attraktiv, 51-90 guter Kaufkandidat, 91-140 eher Value/Trading,
@@ -79,30 +81,28 @@ cold_start_overpay_pct:
 no_bid_score_threshold: 0.30
 no_bid_overpay_pct_threshold: 1.0
 
-# Ab wie vielen effektiv gewichteten aehnlichen Transfers die empirische
-# Liga-Kalibrierung voll (statt nur teilweise, gemischt mit dem
-# regelbasierten Grundmodell) zaehlt.
-similar_transfers_target_n: 12
-similar_transfers_max_k: 20
+# "Vergleichbar" (similarity.py) ist auf ausdruecklichen Nutzerwunsch hart auf
+# zwei Kriterien reduziert: Marktwert innerhalb eines marktwertabhaengigen
+# Fensters (siehe similarity_mv_window_pct) + gleiche Position. Von allen so
+# gefundenen Kandidaten zaehlen nur die zeitlich JUENGSTEN max_k (= "die
+# letzten zehn vergleichbaren Transfers") -- rein chronologisch, nicht nach
+# Aehnlichkeit sortiert, damit das Modell aktuell bleibt UND sich nicht durch
+# einen einzelnen neuen Ausreisser abrupt veraendert (rollierendes Fenster).
+# target_n = max_k, weil bei zehn Treffern das Fenster voll "eingeschwungen"
+# ist und die empirische Kalibrierung dann voll zaehlen darf.
+similar_transfers_target_n: 10
+similar_transfers_max_k: 10
 
-# Maximale gewichtete Distanz (similarity.py), ab der ein Transfer nicht mehr
-# als "aehnlich" gilt. WICHTIG: der fruehere Default 1.0 war wirkungslos --
-# jede Einzeldimension ist bereits auf [0,1] gedeckelt, ein gewichteter
-# Durchschnitt kann rechnerisch nie darueber liegen, der Filter hat also nie
-# einen Kandidaten ausgeschlossen. Empirisch ermittelt: Median der Distanz
-# ueber viele Spieler-/Transfer-Paare liegt bei ~0.63, unterstes Quartil bei
-# ~0.5 -- 0.50 filtert also spuerbar, ohne den Cold-Start zu ersticken.
-similarity_max_distance: 0.50
-
-# Distanz-Gewichte fuer die Aehnlichkeitssuche (similarity.py) -- je groesser,
-# desto staerker zaehlt eine Abweichung in dieser Dimension.
-similarity_weights:
-  market_value_log: 1.4
-  rank_tier: 1.1
-  start_probability: 1.3
-  ppm: 0.8
-  market_value_trend_pct: 0.6
-  position: 0.5
+# Marktwertfenster je Marktwertklasse (siehe market_value_classes fuer die
+# Klassengrenzen) in Prozent des Marktwerts des Zielspielers: je niedriger der
+# Marktwert, desto enger das Fenster (ein 2-Mio.-Spieler soll nicht mit einem
+# 4-Mio.-Spieler verglichen werden), je hoeher der Marktwert, desto weiter
+# darf der Vergleich auseinanderliegen (bei einem 30-Mio.-Spieler ist auch ein
+# deutlich teurerer/guenstigerer Transfer noch aussagekraeftig). Explizite
+# Nutzervorgabe, ersetzt die fruehere gewichtete Distanz ueber alle
+# Dimensionen (Rang/Startchance/PPM/Trend zaehlen nicht mehr zur
+# Vergleichbarkeit, nur noch zur Kategorie/zum Basis-Score in scoring.py).
+similarity_mv_window_pct: [15, 20, 25, 30, 40, 50, 60, 75]
 
 # Zeitgewichtung (Tage seit Transfer -> Gewicht), aus der Aufgabenstellung:
 # letzte 7 Tage stark, 8-21 Tage mittel, aeltere Transfers schwaecher.

@@ -1,104 +1,93 @@
-"""Findet je Spieler die aehnlichsten historischen Ligatransfers (gewichtete
-Distanz ueber Marktwert, Rang, Startchance, PKT/MIO, MW-Trend, Position) und
-leitet daraus einen erwarteten Overpay + Confidence-relevante Kennzahlen ab
-(siehe Aufgabenstellung "Aehnliche Transfers").
+"""Findet je Spieler die letzten (chronologisch juengsten) vergleichbaren
+Ligatransfers und leitet daraus einen erwarteten Overpay + Confidence-
+relevante Kennzahlen ab (siehe Aufgabenstellung "Aehnliche Transfers").
 
-Live-Spielerzeilen (export_artifact.build_rows) und angereicherte Transfer-
-Records (transfers.py) tragen absichtlich dieselben Feldnamen fuer die hier
-verglichenen Groessen (market_value, kauf_rank, start_probability,
-points_per_value, market_value_change_day, position) -- ein Feature-Vektor
-reicht fuer beide Seiten."""
-import math
-from datetime import datetime
+"Vergleichbar" ist auf ausdruecklichen Nutzerwunsch hart auf zwei Kriterien
+reduziert: 1) Marktwert liegt innerhalb eines Fensters um den Marktwert des
+Zielspielers, dessen Breite mit dem Marktwert waechst -- je niedriger der
+Marktwert, desto enger das Fenster (ein 2-Mio.-Spieler soll nicht mit einem
+4-Mio.-Spieler verglichen werden), je hoeher der Marktwert, desto weiter darf
+der Vergleich auseinanderliegen (bei einem 30-Mio.-Spieler ist auch ein
+deutlich teurerer/guenstigerer Transfer noch aussagekraeftig, siehe
+similarity_mv_window_pct). 2) gleiche Position. Rang, Startchance, PKT/MIO und
+MW-Trend beeinflussen NICHT mehr, ob ein Transfer als vergleichbar gilt --
+diese fliessen weiterhin in den regelbasierten Attraktivitaets-Score
+(scoring.py) ein, aber nicht mehr zusaetzlich in die Aehnlichkeitssuche
+(fruehere gewichtete Distanz ueber alle Dimensionen ist entfallen).
+
+Von allen so gefundenen Kandidaten zaehlen nur die zeitlich JUENGSTEN
+`similar_transfers_max_k` (Default 10, "die letzten zehn vergleichbaren
+Transfers") -- rein chronologisch sortiert, NICHT nach (Un-)Aehnlichkeit. Das
+haelt das Modell aktuell (alte, laengst nicht mehr repraesentative Transfers
+fallen automatisch aus dem Fenster) UND stabil (ein einzelner neuer
+Ausreisser-Transfer ist nur einer von zehn Datenpunkten und kann das Ergebnis
+nicht alleine kippen)."""
+from datetime import datetime, timezone
 from typing import Optional
 
 from kickbase_tool.bidding.calibration import record_weight
-from kickbase_tool.bidding.scoring import rank_tier_index
-from kickbase_tool.bidding.stats import robust_weighted_stats
+from kickbase_tool.bidding.stats import (
+    market_value_class_index,
+    parse_iso_datetime,
+    robust_weighted_stats,
+)
 
-# Frueherer Default (1.0) war wirkungslos: jede Einzeldimension ist bereits
-# durch ihre eigene Formel auf [0,1] gedeckelt, ein gewichteter Durchschnitt
-# solcher Werte kann rechnerisch NIE ueber 1.0 liegen -- der Filter hat also
-# nie einen einzigen Kandidaten ausgeschlossen (siehe Root-Cause-Analyse
-# Faehig-Silva-Fall). Empirisch ermittelt (Verteilung der Distanzen ueber
-# viele Spieler/Transfer-Paare, siehe tests): der Median liegt bei ~0.63, das
-# unterste Quartil (die tatsaechlich "aehnlichen" Faelle) bei ~0.5. Deshalb
-# hier ein Wert, der wirklich filtert, statt eine reine Kosmetik-Konstante.
-DEFAULT_MAX_DISTANCE = 0.50
+_EPOCH = datetime.min.replace(tzinfo=timezone.utc)
 
 
-def _market_value_trend_pct(row: dict) -> Optional[float]:
-    mv = row.get("market_value")
-    change = row.get("market_value_change_day")
-    if not mv or change is None:
+def market_value_window_pct(market_value: Optional[float], config: dict) -> Optional[float]:
+    """Fensterbreite in Prozent des Marktwerts fuer die Marktwertklasse, in
+    die `market_value` faellt (siehe similarity_mv_window_pct/Modul-Docstring)."""
+    if market_value is None:
         return None
-    return (change / mv) * 100.0
-
-
-def _dim_distance(a, b, scale: float, cap: float = 1.0) -> Optional[float]:
-    if a is None or b is None:
+    windows = config.get("similarity_mv_window_pct")
+    if not windows:
         return None
-    return min(cap, abs(a - b) / scale) if scale else min(cap, abs(a - b))
-
-
-def weighted_distance(target: dict, candidate: dict, config: dict) -> Optional[float]:
-    weights = config["similarity_weights"]
-    parts = []
-
-    mv_a, mv_b = target.get("market_value"), candidate.get("market_value")
-    if mv_a and mv_b and mv_a > 0 and mv_b > 0:
-        dist = min(1.0, abs(math.log(mv_a) - math.log(mv_b)) / math.log(2))
-        parts.append((dist, weights["market_value_log"]))
-
-    tier_a = rank_tier_index(target.get("kauf_rank"), config)
-    tier_b = rank_tier_index(candidate.get("kauf_rank"), config)
-    if tier_a is not None and tier_b is not None:
-        parts.append((abs(tier_a - tier_b) / 4.0, weights["rank_tier"]))
-
-    sp_a, sp_b = target.get("start_probability"), candidate.get("start_probability")
-    if sp_a is not None and sp_b is not None:
-        parts.append((abs(sp_a - sp_b) / 4.0, weights["start_probability"]))
-
-    ppm_a = target.get("points_per_value")
-    ppm_b = candidate.get("points_per_value")
-    ppm_a = ppm_a * 1_000_000 if ppm_a is not None else None
-    ppm_b = ppm_b * 1_000_000 if ppm_b is not None else None
-    dist = _dim_distance(ppm_a, ppm_b, scale=5.0)
-    if dist is not None:
-        parts.append((dist, weights["ppm"]))
-
-    trend_a, trend_b = _market_value_trend_pct(target), _market_value_trend_pct(candidate)
-    dist = _dim_distance(trend_a, trend_b, scale=10.0)
-    if dist is not None:
-        parts.append((dist, weights["market_value_trend_pct"]))
-
-    pos_a, pos_b = target.get("position"), candidate.get("position")
-    if pos_a and pos_b:
-        parts.append((0.0 if pos_a == pos_b else 1.0, weights["position"]))
-
-    if not parts:
+    idx = market_value_class_index(market_value, config["market_value_classes"])
+    if idx is None:
         return None
-    total_weight = sum(w for _, w in parts)
-    if total_weight <= 0:
-        return None
-    return sum(d * w for d, w in parts) / total_weight
+    return windows[min(idx, len(windows) - 1)]
+
+
+def is_comparable(target: dict, candidate: dict, config: dict) -> bool:
+    """Hartes Kriterium (keine graduelle Distanz): Marktwert innerhalb des
+    marktwertabhaengigen Fensters um den Zielmarktwert UND gleiche Position,
+    falls beide Positionen bekannt sind (fehlende Positionsangabe disqualifiziert
+    nicht, sie wird einfach nicht geprueft)."""
+    target_mv = target.get("market_value")
+    candidate_mv = candidate.get("market_value")
+    if not target_mv or not candidate_mv or target_mv <= 0 or candidate_mv <= 0:
+        return False
+
+    window_pct = market_value_window_pct(target_mv, config)
+    if window_pct is None:
+        return False
+    lower = target_mv * (1.0 - window_pct / 100.0)
+    upper = target_mv * (1.0 + window_pct / 100.0)
+    if candidate_mv < lower or candidate_mv > upper:
+        return False
+
+    target_pos, candidate_pos = target.get("position"), candidate.get("position")
+    if target_pos and candidate_pos and target_pos != candidate_pos:
+        return False
+
+    return True
 
 
 def similar_transfers(
     target_row: dict, transfer_log: list, config: dict, now: Optional[datetime] = None
 ) -> dict:
-    max_distance = config.get("similarity_max_distance", DEFAULT_MAX_DISTANCE)
-    candidates = []
-    for record in transfer_log:
-        if record.get("overpay_pct") is None:
-            continue
-        distance = weighted_distance(target_row, record, config)
-        if distance is None or distance > max_distance:
-            continue
-        candidates.append((record, distance))
+    max_k = config.get("similar_transfers_max_k", 10)
+    candidates = [
+        record
+        for record in transfer_log
+        if record.get("overpay_pct") is not None and is_comparable(target_row, record, config)
+    ]
 
-    candidates.sort(key=lambda rd: rd[1])
-    top_k = candidates[: config["similar_transfers_max_k"]]
+    # Rein chronologisch (juengste zuerst) statt nach Aehnlichkeit sortiert --
+    # explizite Nutzervorgabe fuer Aktualitaet + Stabilitaet, siehe Modul-Docstring.
+    candidates.sort(key=lambda r: parse_iso_datetime(r.get("dt")) or _EPOCH, reverse=True)
+    top_k = candidates[:max_k]
 
     # Wie viele der herangezogenen Vergleichstransfers sind NICHT von der
     # Erstbefuellung betroffen (siehe transfers.py-Docstring: backfilled=True
@@ -106,19 +95,26 @@ def similar_transfers(
     # echten Transferzeitpunkt angereichert -- Look-ahead-Bias). Nur diese
     # "frischen" Treffer duerfen das regelbasierte Grundmodell in pricing.py
     # nennenswert verdraengen; siehe n_fresh dort.
-    n_fresh = sum(1 for record, _ in top_k if not record.get("backfilled"))
+    n_fresh = sum(1 for record in top_k if not record.get("backfilled"))
 
+    target_mv = target_row.get("market_value")
     weighted_points = []
     neighbor_summaries = []
-    for record, distance in top_k:
-        weight = record_weight(record, config, now=now) * max(0.15, 1.0 - distance)
+    for record in top_k:
+        weight = record_weight(record, config, now=now)
         weighted_points.append((record["overpay_pct"], weight))
+        record_mv = record.get("market_value")
+        mv_diff_pct = (
+            round(abs(record_mv - target_mv) / target_mv * 100.0, 1)
+            if record_mv and target_mv
+            else None
+        )
         neighbor_summaries.append({
             "player_name": record.get("player_name"),
             "buyer": record.get("buyer"),
             "overpay_pct": record.get("overpay_pct"),
             "dt": record.get("dt"),
-            "distance": round(distance, 3),
+            "mv_diff_pct": mv_diff_pct,
             "backfilled": bool(record.get("backfilled")),
         })
 
