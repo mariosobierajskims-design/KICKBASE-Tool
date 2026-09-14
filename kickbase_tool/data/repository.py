@@ -12,6 +12,7 @@ from kickbase_tool.data.normalize import (
     extract_current_season_performance,
     extract_fixture_list,
     extract_player_list,
+    extract_roster_extra_fields,
     extract_table_list,
     normalize_fixture,
     normalize_performance_entry,
@@ -61,8 +62,10 @@ def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool
     )
     fixtures = _normalize_fixtures(matchdays_raw)
 
-    player_ids_by_team = _fetch_team_rosters(client, settings, cache, table, force_refresh=force_refresh)
-    players = _fetch_player_details_and_performance(client, settings, cache, player_ids_by_team, force_refresh=force_refresh)
+    player_ids_by_team, roster_extra_by_pid = _fetch_team_rosters(client, settings, cache, table, force_refresh=force_refresh)
+    players = _fetch_player_details_and_performance(
+        client, settings, cache, player_ids_by_team, roster_extra_by_pid, force_refresh=force_refresh
+    )
 
     home_venue_points, away_venue_points = _fetch_venue_points(cache, settings, table, force_refresh=force_refresh)
 
@@ -130,10 +133,18 @@ def _fetch_team_rosters(
     cache: JsonFileCache,
     table: List[TableEntry],
     force_refresh: bool,
-) -> List[tuple]:
+) -> tuple:
     """Returns a flat list of (player_id, team_id) by calling teamprofile once
     per team -- this is the only way to discover the full player pool, since
-    COMPETITION_PLAYERS is scoped to the current matchday's two teams only."""
+    COMPETITION_PLAYERS is scoped to the current matchday's two teams only.
+
+    Also returns a {player_id: {...}} dict of the roster-only fields (Startelf-
+    Wahrscheinlichkeit, taegliche Marktwert-Aenderung -- see
+    normalize.extract_roster_extra_fields) that only exist on this response,
+    not on the per-player detail endpoint fetched afterwards in
+    _fetch_player_details_and_performance. Discarding these here (as the code
+    did before the Gebotsmodell) would mean re-fetching a whole extra endpoint
+    just to get data already in hand."""
 
     def fetch_one(team: TableEntry):
         raw = cache.get_or_fetch(
@@ -146,18 +157,26 @@ def _fetch_team_rosters(
             ),
             force_refresh=force_refresh,
         )
-        return [
-            (str(pick(p, "i", "id", "pi")), team.team_id)
-            for p in extract_player_list(raw)
-            if pick(p, "i", "id", "pi") is not None
-        ]
+        ids = []
+        extra = {}
+        for p in extract_player_list(raw):
+            pid = pick(p, "i", "id", "pi")
+            if pid is None:
+                continue
+            pid = str(pid)
+            ids.append((pid, team.team_id))
+            extra[pid] = extract_roster_extra_fields(p)
+        return ids, extra
 
     results: List[tuple] = []
+    extra_by_pid: Dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=settings.max_workers) as pool:
         futures = {pool.submit(fetch_one, team): team for team in table}
         for future in as_completed(futures):
-            results.extend(future.result())
-    return results
+            ids, extra = future.result()
+            results.extend(ids)
+            extra_by_pid.update(extra)
+    return results, extra_by_pid
 
 
 def _fetch_player_details_and_performance(
@@ -165,6 +184,7 @@ def _fetch_player_details_and_performance(
     settings: Settings,
     cache: JsonFileCache,
     player_ids_by_team: List[tuple],
+    roster_extra_by_pid: Dict[str, dict],
     force_refresh: bool,
 ) -> List[Player]:
     def fetch_one(player_id: str, roster_team_id: str) -> Player:
@@ -209,6 +229,12 @@ def _fetch_player_details_and_performance(
             normalize_performance_entry(entry, fallback_team_id=player.team_id)
             for entry in extract_current_season_performance(performance_raw)
         ]
+
+        roster_extra = roster_extra_by_pid.get(player_id)
+        if roster_extra:
+            player.start_probability = roster_extra.get("start_probability")
+            player.market_value_trend_direction = roster_extra.get("market_value_trend_direction")
+            player.market_value_change_day = roster_extra.get("market_value_change_day")
         return player
 
     players: List[Player] = []

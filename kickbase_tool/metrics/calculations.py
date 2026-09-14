@@ -73,6 +73,15 @@ class PlayerMetrics:
     team_momentum: Optional[float]
     opponent_momentum: Optional[float]
 
+    # Startelf-Wahrscheinlichkeit + taegliche Marktwert-Aenderung, pass-through
+    # von Player (siehe data/models.py) fuer das Gebotsmodell in
+    # kickbase_tool/bidding/ -- bewusst kein eigenes Ranking-Kriterium (siehe
+    # weights.yaml-Kommentar zu Kennzahl 13), nur Rohdaten-Durchreichung.
+    # Defaults halten bestehende Konstruktor-Aufrufe (u.a. in tests/test_scoring.py)
+    # funktionsfaehig, ohne dass diese Felder dort explizit gesetzt werden muessen.
+    start_probability: Optional[int] = None
+    market_value_change_day: Optional[float] = None
+
 
 TeamPointsByMatchday = Dict[Tuple[str, int], float]
 VenueMap = Dict[Tuple[str, int], bool]  # (team_id, matchday) -> is_home
@@ -327,5 +336,7 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             opponent_remaining_schedule_difficulty=opponent_remaining_difficulty,
             team_momentum=own_momentum,
             opponent_momentum=opp_momentum,
+            start_probability=player.start_probability,
+            market_value_change_day=player.market_value_change_day,
         )
     return results

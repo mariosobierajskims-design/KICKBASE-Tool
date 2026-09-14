@@ -50,6 +50,21 @@ def normalize_team_roster_entry(raw: dict) -> Player:
     return normalize_player_detail(raw)
 
 
+def extract_roster_extra_fields(raw: dict) -> dict:
+    """Pulls the fields confirmed live ONLY on roster-shaped responses
+    (/teamprofile and /leagues/{id}/squad) -- "prob" (Startelf-Wahrscheinlichkeit,
+    see data/models.START_PROBABILITY_LABELS) and "sdmvt" (signed daily
+    Marktwert-Aenderung in Euro). Neither field is present on the per-player
+    detail endpoint (/players/{playerId}), which is why callers must capture
+    this separately from the roster call in data/repository.py instead of
+    getting it "for free" from normalize_player_detail."""
+    return {
+        "start_probability": pick(raw, "prob"),
+        "market_value_trend_direction": pick(raw, "mvt"),
+        "market_value_change_day": _to_float(pick(raw, "sdmvt")),
+    }
+
+
 def _current_season_block(performance_raw: dict) -> dict:
     """/players/{id}/performance groups per-matchday entries by season under
     "it" (one block per season the player has data for, each with an "sid").

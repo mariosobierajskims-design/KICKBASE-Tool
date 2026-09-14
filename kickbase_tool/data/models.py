@@ -29,6 +29,35 @@ def status_label(status: Optional[int]) -> str:
     return STATUS_LABELS.get(status, f"Status {status}")
 
 
+# Startelf-Wahrscheinlichkeit ("prob"), confirmed live 2026-09-14 against
+# /v4/competitions/{id}/teams/{id}/teamprofile and /v4/leagues/{id}/squad
+# responses -- NOT present on the per-player detail endpoint, which is why
+# this is populated separately in data/repository.py from the roster call
+# that's already being made (see _fetch_team_rosters). Values 1/2/3/5
+# confirmed against real squad data (e.g. a backup goalkeeper = 5, an
+# injured/angeschlagen starter = 5, an undisputed starter = 1); 4 is filled
+# in by elimination (not observed live yet, but the only gap in the 1-5
+# range and consistent with community reverse-engineering docs).
+START_PROBABILITY_SICHER = 1
+START_PROBABILITY_ERWARTET = 2
+START_PROBABILITY_UNSICHER = 3
+START_PROBABILITY_UNWAHRSCHEINLICH = 4
+START_PROBABILITY_AUSGESCHLOSSEN = 5
+START_PROBABILITY_LABELS = {
+    1: "Sicher",
+    2: "Erwartet",
+    3: "Unsicher",
+    4: "Unwahrscheinlich",
+    5: "Ausgeschlossen",
+}
+
+
+def start_probability_label(value: Optional[int]) -> Optional[str]:
+    if value is None:
+        return None
+    return START_PROBABILITY_LABELS.get(value)
+
+
 @dataclass
 class MatchdayEntry:
     matchday: int
@@ -60,10 +89,24 @@ class Player:
     image_url: Optional[str] = None
     team_logo_url: Optional[str] = None
     matchdays: List[MatchdayEntry] = field(default_factory=list)
+    # Populated from the team-roster ("teamprofile") response in
+    # data/repository.py, not from normalize_player_detail -- see
+    # start_probability_label() above for why these live here as plain
+    # optional fields rather than on a separate model.
+    start_probability: Optional[int] = None
+    # Raw Kickbase "mvt" direction flag (0=stable/1=up/2=down, best-effort --
+    # market_value_change_day below is the actual signed € amount and should
+    # be preferred wherever a magnitude is needed).
+    market_value_trend_direction: Optional[int] = None
+    market_value_change_day: Optional[float] = None
 
     @property
     def name(self) -> str:
         return f"{self.first_name} {self.last_name}".strip() or self.id
+
+    @property
+    def start_probability_text(self) -> Optional[str]:
+        return start_probability_label(self.start_probability)
 
     @property
     def is_unavailable(self) -> bool:

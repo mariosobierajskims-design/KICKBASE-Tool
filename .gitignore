@@ -8,3 +8,4 @@ __pycache__/
 *.egg-info/
 out/
 artifact_data/
+league_history/

@@ -1,0 +1,128 @@
+# Zentrale Konfiguration fuer das Gebotsmodell (kickbase_tool/bidding/).
+#
+# Alle Werte hier sind frei anpassbar, ohne Code aendern zu muessen -- fehlt
+# ein Schluessel oder die ganze Datei, greifen die Defaults aus
+# kickbase_tool/bidding/config.py (DEFAULTS), das Modell stuerzt also nie ab.
+#
+# Diese Datei enthaelt bewusst die STARTWERTE (identisch zu den Python-Defaults);
+# Sinn und Zweck ist, dass du hier direkt anpassen kannst, sobald du siehst,
+# wie sich das Modell in deiner Liga verhaelt, ohne Python-Code zu beruehren.
+
+# Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
+# (kickbase_tool/bidding/scoring.py). Groessenordnung ist relativ zueinander.
+# Startwahrscheinlichkeit ist auf ausdruecklichen Wunsch der wichtigste Faktor.
+attractiveness:
+  start_probability_weight: 3.0
+  rank_tier_weight: 1.8
+  ppm_efficiency_weight: 1.2
+  market_value_trend_weight: 0.5
+
+# Rang-Baender aus der Aufgabenstellung: Rang 1-20 potenzieller ALL-IN-Spieler,
+# 21-50 sehr attraktiv, 51-90 guter Kaufkandidat, 91-140 eher Value/Trading,
+# 141+ nur bei gutem Preis. "max_rank: null" = offenes Ende (schlechtester Tier).
+rank_tiers:
+  - { max_rank: 20, score: 1.00 }
+  - { max_rank: 50, score: 0.82 }
+  - { max_rank: 90, score: 0.62 }
+  - { max_rank: 140, score: 0.42 }
+  - { max_rank: null, score: 0.22 }
+
+# Score je Startwahrscheinlichkeits-Kategorie (Kickbase-Code 1=Sicher..5=Ausgeschlossen).
+# "Ausgeschlossen" bewusst deutlich ueber 0 -- er kann trotzdem eingewechselt werden.
+start_probability_score:
+  "1": 1.00  # Sicher
+  "2": 0.85  # Erwartet
+  "3": 0.60  # Unsicher
+  "4": 0.42  # Unwahrscheinlich
+  "5": 0.35  # Ausgeschlossen -- kalibriert am Reggiani-Beispiel (siehe scoring.py-Tests):
+             # niedrig genug, um WILL-ICH-HABEN/ALL-IN zuverlaessig zu deckeln,
+             # aber nicht so niedrig, dass ein starker MW-Trend ihn bis unter
+             # UEBER_MARKTWERT auf MARKTWERT herunterzieht.
+  none: 0.50 # unbekannt (z.B. Datenausfall) -- neutral statt bestrafend
+
+# Ab welchem Marktwert die PKT/MIO-Effizienz an Gewicht verliert -- ein teurer
+# Topspieler darf ineffizienter sein (siehe Schlotterbeck-Beispiel: absolute
+# Punkte schlagen Kapitaleffizienz). Linear interpoliert zwischen den beiden
+# MW-Grenzen von voller Gewichtung (1.0) auf ppm_efficiency_fade_min_weight.
+ppm_efficiency_fade_start_mv: 15000000
+ppm_efficiency_fade_end_mv: 40000000
+ppm_efficiency_fade_min_weight: 0.35
+
+# Score-Schwellen (auf dem finalen 0..1 Attraktivitaets-Score) fuer die vier
+# Gebotskategorien. Alles darunter faellt in die naechstniedrigere Kategorie,
+# unterhalb von ueber_marktwert = MARKTWERT (evtl. sogar "kein Gebot").
+category_thresholds:
+  all_in: 0.80
+  will_haben: 0.62
+  ueber_marktwert: 0.37
+
+# Harte Deckelung: Unwahrscheinlich/Ausgeschlossen duerfen die Kategorie nicht
+# allein durch starken MW-Trend/guten Rang bis WILL-ICH-HABEN oder ALL-IN
+# heben (siehe Reggiani-Beispiel: Ausgeschlossen -> maximal ueber_marktwert).
+start_probability_category_cap:
+  "4": ueber_marktwert
+  "5": ueber_marktwert
+
+# Cold-Start-Overpay-Spannen (%) je Kategorie -- werden benutzt, solange zu
+# wenig echte, aehnliche Ligatransfers vorliegen (siehe pricing.py). Mit
+# wachsendem Transfer-Log verschiebt sich die Gewichtung automatisch in
+# Richtung der echten, empirisch aus deiner Liga kalibrierten Werte.
+cold_start_overpay_pct:
+  all_in: { low: 10.0, mid: 16.0, high: 25.0 }
+  will_haben: { low: 6.0, mid: 10.0, high: 16.0 }
+  ueber_marktwert: { low: 1.0, mid: 4.0, high: 8.0 }
+  marktwert: { low: -4.0, mid: -1.0, high: 2.0 }
+
+# Unterhalb dieses Attraktivitaets-Scores UND wenn auch der kalibrierte
+# Overpay nicht klar positiv ist, empfiehlt die Spalte "kein Gebot" statt
+# einer Zahl.
+no_bid_score_threshold: 0.30
+no_bid_overpay_pct_threshold: 1.0
+
+# Ab wie vielen effektiv gewichteten aehnlichen Transfers die empirische
+# Liga-Kalibrierung voll (statt nur teilweise, gemischt mit dem
+# regelbasierten Grundmodell) zaehlt.
+similar_transfers_target_n: 12
+similar_transfers_max_k: 20
+
+# Distanz-Gewichte fuer die Aehnlichkeitssuche (similarity.py) -- je groesser,
+# desto staerker zaehlt eine Abweichung in dieser Dimension.
+similarity_weights:
+  market_value_log: 1.4
+  rank_tier: 1.1
+  start_probability: 1.3
+  ppm: 0.8
+  market_value_trend_pct: 0.6
+  position: 0.5
+
+# Zeitgewichtung (Tage seit Transfer -> Gewicht), aus der Aufgabenstellung:
+# letzte 7 Tage stark, 8-21 Tage mittel, aeltere Transfers schwaecher.
+recency_weight_days:
+  - { max_days: 7, weight: 1.0 }
+  - { max_days: 21, weight: 0.5 }
+  - { max_days: null, weight: 0.2 }
+
+# Transfers, die erst NACH dem eigentlichen Transfer-Zeitpunkt entdeckt wurden
+# (z.B. beim allerersten Import der ganzen Saison-Historie) und deshalb mit
+# dem Marktwert/Rang von HEUTE statt vom echten Transfer-Tag angereichert
+# werden mussten, zaehlen mit reduziertem Gewicht -- daempft Look-ahead-Bias,
+# ohne die Daten komplett zu verwerfen.
+backfilled_weight_factor: 0.6
+
+# Wie stark der Liga-Markt-Faktor (aktuelle Liga-weite Preisaggressivitaet)
+# den finalen Overpay zusaetzlich verschieben darf (Prozentpunkte, gedeckelt).
+market_factor_max_shift_pct: 4.0
+
+# Wie stark ein stark beschleunigender MW-Trend den Overpay INNERHALB der
+# Kategorie nach oben ziehen darf (Prozentpunkte, gedeckelt) -- soll
+# aggressiver machen, aber nicht den sportlichen Wert dominieren.
+trend_bonus_max_shift_pct: 3.0
+
+# Marktwertklassen (Grenzen, obere Grenze exklusiv) fuer Kalibrierung und
+# Aehnlichkeitssuche.
+market_value_classes: [3000000, 6000000, 10000000, 15000000, 20000000, 25000000, 30000000]
+
+# Gebotsspanne: die untere Grenze der angezeigten Spanne liegt bei diesem
+# Anteil des Overpays ueber Marktwert (die Hauptspalte zeigt immer die obere
+# Grenze, siehe Aufgabenstellung).
+bid_range_lower_fraction: 0.85

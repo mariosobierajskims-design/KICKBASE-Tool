@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
+from kickbase_tool.bidding.pipeline import compute_bids
 from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
 from kickbase_tool.data.repository import fetch_owned_player_ids, load_dataset
@@ -62,6 +63,8 @@ def build_rows(argv=None) -> list:
             "recent_max": pm.recent_form.maximum,
             "market_value": pm.market_value,
             "points_per_value": pm.points_per_market_value,
+            "start_probability": pm.start_probability,
+            "market_value_change_day": pm.market_value_change_day,
             "team_form": pm.team_form,
             "opponent_form": pm.opponent_form,
             "table_position_diff": pm.table_position_diff,
@@ -88,6 +91,15 @@ def build_rows(argv=None) -> list:
             "verkauf_score": rankings["verkauf"].scores.get(pid),
             "verkauf_rank": rank_position["verkauf"].get(pid),
         })
+
+    # Gebotsmodell (kickbase_tool/bidding/): eigenkapselt und defensiv --
+    # compute_bids() faengt jeden eigenen Fehler ab und liefert dann {} statt
+    # den Kernexport zu gefaehrden (siehe fetch_owned_player_ids oben fuer das
+    # gleiche Muster in diesem Modul).
+    bids_by_pid = compute_bids(rows, client, settings)
+    for row in rows:
+        row["bid"] = bids_by_pid.get(row["id"])
+
     return rows
 
 

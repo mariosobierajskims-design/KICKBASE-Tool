@@ -17,6 +17,15 @@ LEAGUE_MARKET = "/v4/leagues/{league_id}/market"
 LEAGUE_ME = "/v4/leagues/{league_id}/me"
 LEAGUE_RANKING = "/v4/leagues/{league_id}/ranking"
 LEAGUE_PLAYER_PERFORMANCE = "/v4/leagues/{league_id}/players/{player_id}/performance"
+# Confirmed live 2026-09-14 (undocumented in the public community docs this
+# file otherwise references): the league-wide activity feed, which includes
+# completed transfers (entry "t" == 15; nested "data.t" == 1 for a purchase
+# with a buyer name in "data.byr", == 2 for a sale back to the market with no
+# buyer). "max" is a genuine result-count param (tested up to 5000); the
+# league's actual history currently tops out at 790 entries server-side, not
+# a client-chosen page size. This is the real-transfers learning basis for
+# kickbase_tool/bidding/ -- see that package's README-equivalent docstring.
+LEAGUE_ACTIVITIES_FEED = "/v4/leagues/{league_id}/activitiesFeed"
 
 COMPETITION_PLAYERS = "/v4/competitions/{competition_id}/players"
 COMPETITION_PLAYER_DETAIL = "/v4/competitions/{competition_id}/players/{player_id}"
