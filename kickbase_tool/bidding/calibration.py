@@ -89,10 +89,16 @@ def market_stats_by_class_and_tier(
         )
         buckets.setdefault(key, []).append(record)
 
-    return {
-        key: robust_weighted_stats(_weighted_overpay_points(records, config, now=now))
-        for key, records in buckets.items()
-    }
+    result = {}
+    for key, records in buckets.items():
+        stats = robust_weighted_stats(_weighted_overpay_points(records, config, now=now))
+        # Wie viele Transfers in diesem Segment NICHT von der Erstbefuellung
+        # betroffen sind (siehe similarity.py fuer dieselbe Ueberlegung) --
+        # pricing.py darf diesem Fallback nur vertrauen, wenn genug davon
+        # tatsaechlich zeitpunktgenau erfasst wurden.
+        stats["n_fresh"] = sum(1 for r in records if not r.get("backfilled"))
+        result[key] = stats
+    return result
 
 
 def lookup_class_tier_stats(

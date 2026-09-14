@@ -72,7 +72,12 @@ def extract_purchase_events(raw_activities: list) -> List[dict]:
             "team_id": pick(data, "tid"),
             "buyer": buyer,
             "transfer_price": float(price),
-            "bid_count": pick(data, "coc"),
+            # "coc" (Anzahl Gebote) liegt live auf der OBERSTEN Ebene des
+            # Activity-Eintrags (entry["coc"]), NICHT in entry["data"] --
+            # live per Live-Abruf bestaetigt 2026-09-14. Die urspruengliche
+            # Version las faelschlich aus data[...] und bekam deshalb immer
+            # None zurueck.
+            "bid_count": pick(entry, "coc"),
             "dt": pick(entry, "dt"),
         })
     return events

@@ -16,7 +16,15 @@ from kickbase_tool.bidding.calibration import record_weight
 from kickbase_tool.bidding.scoring import rank_tier_index
 from kickbase_tool.bidding.stats import robust_weighted_stats
 
-MAX_DISTANCE = 1.0  # Transfers jenseits dieser gewichteten Distanz gelten als nicht mehr vergleichbar.
+# Frueherer Default (1.0) war wirkungslos: jede Einzeldimension ist bereits
+# durch ihre eigene Formel auf [0,1] gedeckelt, ein gewichteter Durchschnitt
+# solcher Werte kann rechnerisch NIE ueber 1.0 liegen -- der Filter hat also
+# nie einen einzigen Kandidaten ausgeschlossen (siehe Root-Cause-Analyse
+# Faehig-Silva-Fall). Empirisch ermittelt (Verteilung der Distanzen ueber
+# viele Spieler/Transfer-Paare, siehe tests): der Median liegt bei ~0.63, das
+# unterste Quartil (die tatsaechlich "aehnlichen" Faelle) bei ~0.5. Deshalb
+# hier ein Wert, der wirklich filtert, statt eine reine Kosmetik-Konstante.
+DEFAULT_MAX_DISTANCE = 0.50
 
 
 def _market_value_trend_pct(row: dict) -> Optional[float]:
@@ -79,17 +87,26 @@ def weighted_distance(target: dict, candidate: dict, config: dict) -> Optional[f
 def similar_transfers(
     target_row: dict, transfer_log: list, config: dict, now: Optional[datetime] = None
 ) -> dict:
+    max_distance = config.get("similarity_max_distance", DEFAULT_MAX_DISTANCE)
     candidates = []
     for record in transfer_log:
         if record.get("overpay_pct") is None:
             continue
         distance = weighted_distance(target_row, record, config)
-        if distance is None or distance > MAX_DISTANCE:
+        if distance is None or distance > max_distance:
             continue
         candidates.append((record, distance))
 
     candidates.sort(key=lambda rd: rd[1])
     top_k = candidates[: config["similar_transfers_max_k"]]
+
+    # Wie viele der herangezogenen Vergleichstransfers sind NICHT von der
+    # Erstbefuellung betroffen (siehe transfers.py-Docstring: backfilled=True
+    # heisst, Marktwert/Rang/etc. wurden mit den Werten von HEUTE statt vom
+    # echten Transferzeitpunkt angereichert -- Look-ahead-Bias). Nur diese
+    # "frischen" Treffer duerfen das regelbasierte Grundmodell in pricing.py
+    # nennenswert verdraengen; siehe n_fresh dort.
+    n_fresh = sum(1 for record, _ in top_k if not record.get("backfilled"))
 
     weighted_points = []
     neighbor_summaries = []
@@ -109,6 +126,7 @@ def similar_transfers(
     return {
         "n": stats["n"],
         "n_considered": len(top_k),
+        "n_fresh": n_fresh,
         "median_pct": stats["median"],
         "p25_pct": stats["p25"],
         "p75_pct": stats["p75"],

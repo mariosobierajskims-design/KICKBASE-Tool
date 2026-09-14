@@ -55,6 +55,16 @@ def test_extract_purchase_events_ignores_non_transfer_activity_types():
     assert extract_purchase_events(raw) == []
 
 
+def test_extract_purchase_events_reads_bid_count_from_top_level_coc():
+    # Regressionstest: "coc" (Anzahl Gebote) liegt live auf der obersten
+    # Ebene des Activity-Eintrags (entry["coc"]), NICHT in entry["data"] --
+    # die urspruengliche Implementierung las aus data["coc"] und bekam deshalb
+    # immer None zurueck, unabhaengig vom tatsaechlichen Wert.
+    raw = [purchase_activity("a1", "100", "Kurti", 5_000_000, coc=7)]
+    events = extract_purchase_events(raw)
+    assert events[0]["bid_count"] == 7
+
+
 def test_ingest_new_transfers_enriches_with_current_row_and_computes_overpay(tmp_path):
     path = tmp_path / "transfers.json"
     activities = [purchase_activity("a1", "2939", "AymenJakob", 9_261_111, coc=2)]

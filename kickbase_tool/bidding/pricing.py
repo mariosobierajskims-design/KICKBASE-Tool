@@ -36,9 +36,14 @@ def _rule_based_overpay_pct(category: str, score: float, config: dict) -> float:
 
 def _confidence(similar_result: Optional[dict], config: dict) -> dict:
     similar_result = similar_result or {}
-    n = similar_result.get("n") or 0
+    # n_fresh statt n: die Confidence soll widerspiegeln, wie sehr der
+    # empirische Anteil tatsaechlich das Ergebnis mittraegt (siehe
+    # recommend_bid -- w_empirical haengt ebenfalls an n_fresh). Ein Pool aus
+    # lauter "backfilled" (zeitlich nicht exakt zuordenbaren) Vergleichen darf
+    # keine hohe Confidence erzeugen, auch wenn er zahlenmaessig gross ist.
+    n_fresh = similar_result.get("n_fresh") or 0
     target_n = config.get("similar_transfers_target_n", 12) or 1
-    base = min(1.0, n / target_n)
+    base = min(1.0, n_fresh / target_n)
 
     p25, p75 = similar_result.get("p25_pct"), similar_result.get("p75_pct")
     if p25 is not None and p75 is not None:
@@ -75,10 +80,20 @@ def recommend_bid(
     n_effective = 0
     if similar_result and similar_result.get("n", 0) >= 3:
         empirical_pct = similar_result["median_pct"]
-        n_effective = similar_result["n"]
+        # WICHTIG: n_fresh statt n. n zaehlt auch Vergleichstransfers, deren
+        # Marktwert/Rang/etc. nur mit den Werten von HEUTE statt vom echten
+        # Transferzeitpunkt angereichert wurden ("backfilled" -- siehe
+        # transfers.py). Deren Overpay-Prozentsatz ist systematisch verzerrt
+        # (siehe Root-Cause-Analyse: Median faellt mit zunehmendem Alter des
+        # Transfers, weil der heutige Marktwert bei steigenden Spielern immer
+        # weiter vom Wert zum Kaufzeitpunkt abweicht). Nur echte, zeitpunktnah
+        # erfasste Treffer duerfen das regelbasierte Modell nennenswert
+        # verdraengen -- sonst uebernimmt das Modell einen Bias mit voller
+        # statt reduzierter Ueberzeugung.
+        n_effective = similar_result.get("n_fresh", 0)
     elif class_tier_stats and class_tier_stats.get("n", 0) >= 3:
         empirical_pct = class_tier_stats["median"]
-        n_effective = class_tier_stats["n"]
+        n_effective = class_tier_stats.get("n_fresh", 0)
 
     target_n = config.get("similar_transfers_target_n", 12) or 1
     w_empirical = min(1.0, n_effective / target_n) if empirical_pct is not None else 0.0
@@ -99,7 +114,16 @@ def recommend_bid(
     bid_upper = bid_lower = overpay_abs = None
     if not no_bid and market_value:
         bid_upper = market_value * (1.0 + final_pct / 100.0)
-        lower_pct = final_pct * config.get("bid_range_lower_fraction", 0.85)
+        # Untere Grenze = ein vorsichtigerer/guenstigerer Alternativwert --
+        # MUSS unabhaengig vom Vorzeichen von final_pct <= bid_upper bleiben.
+        # Die fruehere Formel (lower_pct = final_pct * fraction) verletzte das
+        # bei negativem final_pct (Multiplikation mit einer Zahl < 1 macht
+        # einen negativen Wert BETRAGSMAESSIG KLEINER, also naeher an 0 -->
+        # bid_lower wurde dann groesser statt kleiner als bid_upper). Hier
+        # stattdessen ein Abstand, der IMMER von final_pct weg in Richtung
+        # "guenstiger" (kleinerer Prozentsatz) subtrahiert wird.
+        spread_pct = abs(final_pct) * (1.0 - config.get("bid_range_lower_fraction", 0.85))
+        lower_pct = final_pct - spread_pct
         bid_lower = market_value * (1.0 + lower_pct / 100.0)
         overpay_abs = bid_upper - market_value
 
@@ -107,9 +131,11 @@ def recommend_bid(
 
     reasons = list(attractiveness_result.get("reasons", []))
     if similar_result and similar_result.get("n"):
-        reasons.append(
-            f"Liga-Vergleich ({similar_result['n']} aehnliche Transfers): Median {_fmt_pct(similar_result['median_pct'])}"
-        )
+        n_fresh = similar_result.get("n_fresh", 0)
+        note = f"Liga-Vergleich ({similar_result['n']} aehnliche Transfers): Median {_fmt_pct(similar_result['median_pct'])}"
+        if n_fresh < similar_result["n"]:
+            note += f" -- nur {n_fresh} davon zeitpunktgenau erfasst, Einfluss auf das Gebot entsprechend reduziert"
+        reasons.append(note)
     reasons.append(f"Liga-Markt aktuell: {market_factor.get('label', 'neutral')}")
 
     return {

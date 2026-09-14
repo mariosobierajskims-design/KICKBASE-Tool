@@ -57,3 +57,30 @@ def test_similar_transfers_prefers_closer_matches_in_median():
     result = similar_transfers(target, log, CONFIG)
     assert result["n"] >= 2
     assert result["median_pct"] > 0  # dominated by the two close, positive-overpay records
+
+
+def test_max_distance_actually_excludes_dissimilar_transfers():
+    # Regressionstest: der fruehere Default (MAX_DISTANCE=1.0) war wirkungslos,
+    # weil jede Einzeldimension bereits auf [0,1] gedeckelt ist -- ein
+    # gewichteter Durchschnitt kann rechnerisch nie darueber liegen, der
+    # "Filter" hat also nie einen einzigen Kandidaten ausgeschlossen. Ein klar
+    # unaehnlicher Transfer (anderer Marktwert, Rang, Startchance, Position)
+    # muss jetzt wirklich herausgefiltert werden.
+    target = make_row(market_value=10_000_000, kauf_rank=50, start_probability=1, position="ST")
+    very_different = make_record(
+        overpay_pct=999.0, market_value=500_000, kauf_rank=450, start_probability=5, position="TW",
+    )
+    result = similar_transfers(target, [very_different], CONFIG)
+    assert result["n"] == 0
+    assert result["median_pct"] is None
+
+
+def test_similar_transfers_tracks_n_fresh_separately_from_n():
+    target = make_row(market_value=10_000_000, kauf_rank=50, start_probability=1)
+    log = [
+        make_record(overpay_pct=10.0, market_value=10_100_000, kauf_rank=51, start_probability=1, backfilled=True),
+        make_record(overpay_pct=12.0, market_value=9_900_000, kauf_rank=49, start_probability=1, backfilled=False),
+    ]
+    result = similar_transfers(target, log, CONFIG)
+    assert result["n"] == 2
+    assert result["n_fresh"] == 1

@@ -65,6 +65,11 @@ DEFAULTS: Dict[str, Any] = {
     # Grundmodell ueberschreiben darf.
     "similar_transfers_target_n": 12,
     "similar_transfers_max_k": 20,
+    # Maximale gewichtete Distanz (similarity.py), ab der ein Transfer nicht
+    # mehr als "aehnlich" gilt. Empirisch aus der Distanzverteilung ueber
+    # viele Spieler-/Transfer-Paare ermittelt (Median ~0.63, unterstes Quartil
+    # ~0.5) -- der fruehere Wert 1.0 war wirkungslos, siehe similarity.py.
+    "similarity_max_distance": 0.50,
     # Distanz-Gewichte fuer similarity.py (je kleiner die gewichtete Distanz,
     # desto aehnlicher der historische Transfer).
     "similarity_weights": {

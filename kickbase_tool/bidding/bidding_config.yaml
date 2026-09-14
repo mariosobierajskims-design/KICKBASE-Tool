@@ -85,6 +85,15 @@ no_bid_overpay_pct_threshold: 1.0
 similar_transfers_target_n: 12
 similar_transfers_max_k: 20
 
+# Maximale gewichtete Distanz (similarity.py), ab der ein Transfer nicht mehr
+# als "aehnlich" gilt. WICHTIG: der fruehere Default 1.0 war wirkungslos --
+# jede Einzeldimension ist bereits auf [0,1] gedeckelt, ein gewichteter
+# Durchschnitt kann rechnerisch nie darueber liegen, der Filter hat also nie
+# einen Kandidaten ausgeschlossen. Empirisch ermittelt: Median der Distanz
+# ueber viele Spieler-/Transfer-Paare liegt bei ~0.63, unterstes Quartil bei
+# ~0.5 -- 0.50 filtert also spuerbar, ohne den Cold-Start zu ersticken.
+similarity_max_distance: 0.50
+
 # Distanz-Gewichte fuer die Aehnlichkeitssuche (similarity.py) -- je groesser,
 # desto staerker zaehlt eine Abweichung in dieser Dimension.
 similarity_weights:
