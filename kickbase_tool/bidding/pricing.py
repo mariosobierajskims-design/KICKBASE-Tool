@@ -3,10 +3,23 @@
 (calibration.py) zur finalen Gebotsempfehlung inkl. Confidence, Gebotsspanne
 und Begruendung. Bewusst als letzter, duenner Kombinationsschritt gehalten --
 alle inhaltlich schweren Entscheidungen (was ist attraktiv, was ist aehnlich,
-was ist der Marktzustand) passieren in den jeweils zustaendigen Modulen."""
+was ist der Marktzustand) passieren in den jeweils zustaendigen Modulen.
+
+Der Attraktivitaets-Score entscheidet NUR, wie aggressiv ein Spieler gekauft
+werden soll -- er wird nicht direkt in einen Prozentsatz uebersetzt. Der
+tatsaechliche Overpay kommt aus Kategorie + Cold-Start-Band, ggf. ueberschrieben
+durch echte Liga-Transfers (similarity.py/calibration.py) + Liga-Markt-Faktor.
+_bid_efficiency_check() ist eine rein NACHGELAGERTE zweite Pruefung (P/L beim
+tatsaechlichen Gebot statt beim Marktwert) und fliesst nirgends zurueck in den
+Score oder final_pct -- kein Kreislauf Gebot -> P/L -> Rang -> Gebot."""
 from typing import Optional
 
-from kickbase_tool.bidding.scoring import CATEGORY_LABELS, CATEGORY_MARKTWERT
+from kickbase_tool.bidding.scoring import (
+    CATEGORY_ALL_IN,
+    CATEGORY_LABELS,
+    CATEGORY_MARKTWERT,
+    ppm_thresholds_for,
+)
 
 
 def _category_bounds(category: str, config: dict) -> tuple:
@@ -127,6 +140,10 @@ def recommend_bid(
         bid_lower = market_value * (1.0 + lower_pct / 100.0)
         overpay_abs = bid_upper - market_value
 
+    bid_efficiency_ppm, bid_efficiency_ok = _bid_efficiency_check(
+        row, market_value, bid_upper, category, config
+    )
+
     confidence = _confidence(similar_result, config)
 
     reasons = list(attractiveness_result.get("reasons", []))
@@ -154,7 +171,30 @@ def recommend_bid(
         "reasons": reasons,
         "similar_transfers": similar_result,
         "empirical_weight": round(w_empirical, 2),
+        "bid_efficiency_ppm": bid_efficiency_ppm,
+        "bid_efficiency_ok": bid_efficiency_ok,
     }
+
+
+def _bid_efficiency_check(
+    row: dict, market_value: Optional[float], bid_upper: Optional[float], category: str, config: dict
+) -> tuple:
+    """Zweite, NACHGELAGERTE Sicherheitspruefung (siehe Aufgabenstellung):
+    wie gut ist die PKT/MIO-Effizienz noch, wenn tatsaechlich das empfohlene
+    Gebot statt des Marktwerts bezahlt wird? Rein deskriptiv/nachgelagert --
+    fliesst NICHT zurueck in den Attraktivitaets-Score oder in final_pct oben
+    (kein Kreislauf Gebot -> P/L -> Rang -> Gebot). Bei ALL-IN-Spielern darf
+    die normale Mindestschwelle etwas unterschritten werden (absolute Punkte/
+    begrenzte Startelfplaetze haben bei Elite-Spielern einen eigenen Wert)."""
+    ppm_at_market_value = row.get("points_per_value")
+    if ppm_at_market_value is None or not bid_upper or not market_value:
+        return None, None
+
+    bid_efficiency_ppm = ppm_at_market_value * 1_000_000 * (market_value / bid_upper)
+    min_threshold = ppm_thresholds_for(market_value)["min"]
+    if category == CATEGORY_ALL_IN:
+        min_threshold *= config.get("elite_ppm_min_relaxation", 1.0)
+    return round(bid_efficiency_ppm, 2), bid_efficiency_ppm >= min_threshold
 
 
 def _fmt_pct(value: Optional[float]) -> str:

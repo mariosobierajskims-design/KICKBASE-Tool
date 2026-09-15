@@ -1,11 +1,13 @@
 from kickbase_tool.bidding.config import load_bidding_config
 from kickbase_tool.bidding.scoring import (
+    CATEGORY_ALL_IN,
     CATEGORY_MARKTWERT,
-    CATEGORY_UEBER_MARKTWERT,
     CATEGORY_WILL_HABEN,
     attractiveness,
+    ppm_thresholds_for,
 )
 from kickbase_tool.bidding.pricing import (
+    _bid_efficiency_check,
     _category_bounds,
     _confidence,
     _rule_based_overpay_pct,
@@ -110,20 +112,26 @@ def test_top_player_cold_start_produces_positive_overpay_above_market_value():
     assert result["empirical_weight"] == 0.0  # keine aehnlichen Transfers vorhanden
 
 
-def test_reggiani_style_player_lands_in_ueber_marktwert_with_moderate_overpay():
+def test_reggiani_style_player_lands_at_marktwert_but_still_gets_a_bid():
+    # Mit der rang-/startchance-lastigen Gewichtung (siehe
+    # test_bidding_scoring.test_bad_rank_and_ausgeschlossen_lands_at_marktwert_despite_strong_trend)
+    # reicht der starke MW-Trend allein nicht mehr fuer UEBER_MARKTWERT -- die
+    # Kategorie faellt auf MARKTWERT. Trotzdem soll wegen des starken Trends
+    # (der den Overpay ueber pricing.py beeinflusst, nicht die Grundkategorie)
+    # weiterhin ein Gebot ueber Marktwert herauskommen, kein "kein Gebot".
     row = {
         "market_value": 4_653_000, "market_value_change_day": 373_000,
         "kauf_rank": 218, "start_probability": 5, "points_per_value": None,
         "season_avg": 3.0, "status": "fit",
     }
     attr = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
-    assert attr["category"] == CATEGORY_UEBER_MARKTWERT
+    assert attr["category"] == CATEGORY_MARKTWERT
 
     result = recommend_bid(
         {"market_value": row["market_value"]}, attr, None, None, NEUTRAL_MARKET_FACTOR, CONFIG
     )
     assert result["no_bid"] is False
-    assert result["category"] == CATEGORY_UEBER_MARKTWERT
+    assert result["category"] == CATEGORY_MARKTWERT
     assert result["bid_upper"] >= row["market_value"]
 
 
@@ -254,6 +262,63 @@ def test_bid_range_stays_ordered_when_final_pct_is_positive():
     )
     assert result["overpay_pct"] > 0
     assert result["bid_lower"] <= result["bid_upper"]
+
+
+def test_bid_efficiency_ppm_uses_recommended_bid_not_market_value():
+    # Zweite Sicherheitspruefung (Aufgabenstellung): PKT/MIO beim tatsaechlich
+    # bezahlten Gebot, nicht beim Marktwert -- muss bei einem Overpay > 0
+    # zwangslaeufig niedriger ausfallen als die urspruengliche PKT/MIO-Note.
+    row = {"points_per_value": 8.0 / 1_000_000}
+    market_value = 10_000_000
+    bid_upper = 11_000_000  # +10% Overpay
+    ppm, _ = _bid_efficiency_check(row, market_value, bid_upper, CATEGORY_WILL_HABEN, CONFIG)
+    assert ppm == round(8.0 * (market_value / bid_upper), 2)
+    assert ppm < 8.0
+
+
+def test_bid_efficiency_ok_relaxed_for_all_in_category():
+    # Bei ALL-IN-Spielern darf die normale P/L-Mindestschwelle etwas
+    # unterschritten werden (Aufgabenstellung: absolute Punkte/begrenzte
+    # Startelfplaetze haben bei Elite-Spielern einen eigenen Wert) -- exakt
+    # derselbe (leicht zu niedrige) Wert soll deshalb bei ALL_IN als "ok"
+    # durchgehen, bei jeder anderen Kategorie aber nicht.
+    row = {"points_per_value": 7.15 / 1_000_000}
+    market_value = 10_000_000
+    bid_upper = 11_000_000
+    min_threshold = ppm_thresholds_for(market_value)["min"]
+
+    ppm, ok_will_haben = _bid_efficiency_check(row, market_value, bid_upper, CATEGORY_WILL_HABEN, CONFIG)
+    _, ok_all_in = _bid_efficiency_check(row, market_value, bid_upper, CATEGORY_ALL_IN, CONFIG)
+
+    assert ppm < min_threshold
+    assert ok_will_haben is False
+    assert ok_all_in is True
+
+
+def test_bid_efficiency_check_returns_none_without_ppm_or_bid():
+    assert _bid_efficiency_check({}, 10_000_000, None, CATEGORY_WILL_HABEN, CONFIG) == (None, None)
+    assert _bid_efficiency_check(
+        {"points_per_value": None}, 10_000_000, 11_000_000, CATEGORY_WILL_HABEN, CONFIG
+    ) == (None, None)
+
+
+def test_recommend_bid_exposes_bid_efficiency_fields():
+    row = {
+        "market_value": 10_000_000, "market_value_change_day": 0,
+        "kauf_rank": 60, "start_probability": 2, "points_per_value": 8.0 / 1_000_000,
+        "season_avg": 5.0, "status": "fit",
+    }
+    attr = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
+    result = recommend_bid(
+        {"market_value": row["market_value"], "points_per_value": row["points_per_value"]},
+        attr, None, None, NEUTRAL_MARKET_FACTOR, CONFIG,
+    )
+    assert result["bid_efficiency_ppm"] is not None
+    assert result["bid_efficiency_ok"] in (True, False)
+    # nicht rekursiv: die zweite P/L-Pruefung darf den Attraktivitaets-Score
+    # (und damit die Kategorie/den Overpay) nicht beeinflusst haben.
+    assert result["category"] == attr["category"]
+    assert result["score"] == round(attr["score"], 3)
 
 
 def test_reasons_include_market_context_label():

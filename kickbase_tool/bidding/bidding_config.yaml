@@ -9,46 +9,41 @@
 # wie sich das Modell in deiner Liga verhaelt, ohne Python-Code zu beruehren.
 
 # Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
-# (kickbase_tool/bidding/scoring.py). Auf ausdruecklichen Nutzerwunsch alle
-# vier Faktoren GLEICH gewichtet (die PKT/MIO-Effizienz verliert bei hohem
-# Marktwert trotzdem zusaetzlich an Gewicht, siehe ppm_efficiency_fade_* --
-# das ist eine separate Modulation, keine Abweichung von der Gleichgewichtung).
+# (kickbase_tool/bidding/scoring.py). Explizite Nutzervorgabe, NICHT gleich
+# gewichtet: Kauf-Rang bildet den langfristigen sportlichen Gesamtwert am
+# besten ab (35%), Startchance ist fuer tatsaechliche Punkte am wichtigsten
+# (30%), PKT/MIO-Effizienz zaehlt fuer die Kaderoptimierung (20%), MW-Trend
+# beeinflusst Overpay/Tradingwert am wenigsten (15%). Summe = 1.0. KEIN
+# zusaetzlicher marktwertabhaengiger Fade auf PKT/MIO mehr -- das waere eine
+# doppelte Marktwert-Beruecksichtigung (die MW-Abhaengigkeit steckt schon in
+# den PPM-Schwellen selbst, siehe ppm_thresholds_for/PPM_TIERS).
 attractiveness:
-  start_probability_weight: 1.0
-  rank_tier_weight: 1.0
-  ppm_efficiency_weight: 1.0
-  market_value_trend_weight: 1.0
+  rank_tier_weight: 0.35
+  start_probability_weight: 0.30
+  ppm_efficiency_weight: 0.20
+  market_value_trend_weight: 0.15
 
-# Rang-Baender aus der Aufgabenstellung: Rang 1-20 potenzieller ALL-IN-Spieler,
-# 21-50 sehr attraktiv, 51-90 guter Kaufkandidat, 91-140 eher Value/Trading,
-# 141+ nur bei gutem Preis. "max_rank: null" = offenes Ende (schlechtester Tier).
+# Rang-Baender, explizite Nutzervorgabe (feiner gestuft als zuvor, vor allem
+# im Mittelfeld 141-250). "max_rank: null" = offenes Ende (schlechtester Tier).
 rank_tiers:
   - { max_rank: 20, score: 1.00 }
-  - { max_rank: 50, score: 0.82 }
-  - { max_rank: 90, score: 0.62 }
-  - { max_rank: 140, score: 0.42 }
-  - { max_rank: null, score: 0.22 }
+  - { max_rank: 50, score: 0.85 }
+  - { max_rank: 90, score: 0.70 }
+  - { max_rank: 140, score: 0.55 }
+  - { max_rank: 200, score: 0.35 }
+  - { max_rank: 250, score: 0.20 }
+  - { max_rank: null, score: 0.05 }
 
-# Score je Startwahrscheinlichkeits-Kategorie (Kickbase-Code 1=Sicher..5=Ausgeschlossen).
-# "Ausgeschlossen" bewusst deutlich ueber 0 -- er kann trotzdem eingewechselt werden.
+# Score je Startwahrscheinlichkeits-Kategorie (Kickbase-Code 1=Sicher..5=Ausgeschlossen),
+# explizite Nutzervorgabe. "Ausgeschlossen" bewusst > 0 -- bedeutet nicht
+# automatisch 0 Einsatzminuten, er kann trotzdem eingewechselt werden.
 start_probability_score:
   "1": 1.00  # Sicher
-  "2": 0.85  # Erwartet
-  "3": 0.60  # Unsicher
-  "4": 0.42  # Unwahrscheinlich
-  "5": 0.35  # Ausgeschlossen -- kalibriert am Reggiani-Beispiel (siehe scoring.py-Tests):
-             # niedrig genug, um WILL-ICH-HABEN/ALL-IN zuverlaessig zu deckeln,
-             # aber nicht so niedrig, dass ein starker MW-Trend ihn bis unter
-             # UEBER_MARKTWERT auf MARKTWERT herunterzieht.
+  "2": 0.80  # Erwartet
+  "3": 0.55  # Unsicher
+  "4": 0.30  # Unwahrscheinlich
+  "5": 0.10  # Ausgeschlossen
   none: 0.50 # unbekannt (z.B. Datenausfall) -- neutral statt bestrafend
-
-# Ab welchem Marktwert die PKT/MIO-Effizienz an Gewicht verliert -- ein teurer
-# Topspieler darf ineffizienter sein (siehe Schlotterbeck-Beispiel: absolute
-# Punkte schlagen Kapitaleffizienz). Linear interpoliert zwischen den beiden
-# MW-Grenzen von voller Gewichtung (1.0) auf ppm_efficiency_fade_min_weight.
-ppm_efficiency_fade_start_mv: 15000000
-ppm_efficiency_fade_end_mv: 40000000
-ppm_efficiency_fade_min_weight: 0.35
 
 # Score-Schwellen (auf dem finalen 0..1 Attraktivitaets-Score) fuer die vier
 # Gebotskategorien. Alles darunter faellt in die naechstniedrigere Kategorie,
@@ -80,6 +75,14 @@ cold_start_overpay_pct:
 # einer Zahl.
 no_bid_score_threshold: 0.30
 no_bid_overpay_pct_threshold: 1.0
+
+# Zweite Sicherheitspruefung (pricing.py): wie gut ist die PKT/MIO-Effizienz
+# noch, wenn man tatsaechlich das empfohlene Gebot statt des Marktwerts
+# bezahlt? Bei ALL-IN-Spielern darf die normale Mindestschwelle
+# (ppm_thresholds_for) um diesen Faktor unterschritten werden, weil absolute
+# Punkte und begrenzte Startelfplaetze bei absoluten Elite-Spielern einen
+# eigenen Wert haben.
+elite_ppm_min_relaxation: 0.85
 
 # "Vergleichbar" (similarity.py) ist auf ausdruecklichen Nutzerwunsch hart auf
 # zwei Kriterien reduziert: Marktwert innerhalb eines marktwertabhaengigen

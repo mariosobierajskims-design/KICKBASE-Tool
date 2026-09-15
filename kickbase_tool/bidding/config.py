@@ -16,33 +16,34 @@ DEFAULT_CONFIG_PATH = Path(__file__).with_name("bidding_config.yaml")
 # (z.B. nur "attractiveness.start_probability") den Rest nicht zerstoert.
 DEFAULTS: Dict[str, Any] = {
     # Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
-    # (scoring.py). Auf ausdruecklichen Nutzerwunsch alle vier Faktoren GLEICH
-    # gewichtet (PKT/MIO-Effizienz verliert bei hohem Marktwert zusaetzlich an
-    # Gewicht ueber ppm_efficiency_fade_* -- separate Modulation, keine
-    # Abweichung von der Gleichgewichtung).
+    # (scoring.py). Explizite Nutzervorgabe, NICHT gleich gewichtet: Kauf-Rang
+    # bildet den langfristigen sportlichen Gesamtwert am besten ab (35%),
+    # Startchance ist fuer tatsaechliche Punkte am wichtigsten (30%),
+    # PKT/MIO-Effizienz zaehlt fuer die Kaderoptimierung (20%), MW-Trend
+    # beeinflusst Overpay/Tradingwert am wenigsten (15%). Summe = 1.0. KEIN
+    # zusaetzlicher marktwertabhaengiger Fade auf PKT/MIO mehr (das waere eine
+    # doppelte Marktwert-Beruecksichtigung, siehe ppm_thresholds_for).
     "attractiveness": {
-        "start_probability_weight": 1.0,
-        "rank_tier_weight": 1.0,
-        "ppm_efficiency_weight": 1.0,
-        "market_value_trend_weight": 1.0,
+        "rank_tier_weight": 0.35,
+        "start_probability_weight": 0.30,
+        "ppm_efficiency_weight": 0.20,
+        "market_value_trend_weight": 0.15,
     },
-    # Rang-Baender aus der Aufgabenstellung (Rang 1-20 potenzieller ALL-IN, ...).
+    # Rang-Baender, explizite Nutzervorgabe (feiner gestuft als zuvor, vor
+    # allem im Mittelfeld 141-250).
     "rank_tiers": [
         {"max_rank": 20, "score": 1.00},
-        {"max_rank": 50, "score": 0.82},
-        {"max_rank": 90, "score": 0.62},
-        {"max_rank": 140, "score": 0.42},
-        {"max_rank": None, "score": 0.22},
+        {"max_rank": 50, "score": 0.85},
+        {"max_rank": 90, "score": 0.70},
+        {"max_rank": 140, "score": 0.55},
+        {"max_rank": 200, "score": 0.35},
+        {"max_rank": 250, "score": 0.20},
+        {"max_rank": None, "score": 0.05},
     ],
-    # Score je Startwahrscheinlichkeits-Kategorie (1=Sicher..5=Ausgeschlossen).
-    # Ausgeschlossen bewusst deutlich > 0 (siehe Aufgabenstellung: "kann trotzdem
-    # eingewechselt werden").
-    "start_probability_score": {"1": 1.00, "2": 0.85, "3": 0.60, "4": 0.42, "5": 0.35, "none": 0.50},
-    # Ab welchem Marktwert die PKT/MIO-Effizienz an Gewicht verliert (teure
-    # Topspieler duerfen ineffizienter sein, siehe Schlotterbeck-Beispiel).
-    "ppm_efficiency_fade_start_mv": 15_000_000,
-    "ppm_efficiency_fade_end_mv": 40_000_000,
-    "ppm_efficiency_fade_min_weight": 0.35,
+    # Score je Startwahrscheinlichkeits-Kategorie (1=Sicher..5=Ausgeschlossen),
+    # explizite Nutzervorgabe. Ausgeschlossen bewusst > 0 (kann trotzdem
+    # eingewechselt werden, bedeutet nicht automatisch 0 Einsatzminuten).
+    "start_probability_score": {"1": 1.00, "2": 0.80, "3": 0.55, "4": 0.30, "5": 0.10, "none": 0.50},
     # Score-Schwellen fuer die vier Gebotskategorien (auf den finalen 0..1 Score).
     "category_thresholds": {"all_in": 0.80, "will_haben": 0.62, "ueber_marktwert": 0.37},
     # Harte Deckelung: Startchance Ausgeschlossen/Unwahrscheinlich darf nicht
@@ -63,6 +64,13 @@ DEFAULTS: Dict[str, Any] = {
     # empfohlen (siehe pricing.py).
     "no_bid_score_threshold": 0.30,
     "no_bid_overpay_pct_threshold": 1.0,
+    # Zweite Sicherheitspruefung (pricing.py): wie gut ist die PKT/MIO-Effizienz
+    # noch, wenn man tatsaechlich das empfohlene Gebot statt des Marktwerts
+    # bezahlt? Bei ALL-IN-Spielern darf die normale Mindestschwelle
+    # (ppm_thresholds_for) um diesen Faktor unterschritten werden, weil
+    # absolute Punkte und begrenzte Startelfplaetze bei absoluten Elite-
+    # Spielern einen eigenen Wert haben.
+    "elite_ppm_min_relaxation": 0.85,
     # "Vergleichbar" (similarity.py) ist explizit hart auf zwei Kriterien
     # reduziert: Marktwertfenster (similarity_mv_window_pct) + gleiche
     # Position. Von den Treffern zaehlen nur die zeitlich juengsten max_k

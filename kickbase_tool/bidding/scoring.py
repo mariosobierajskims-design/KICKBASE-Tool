@@ -4,11 +4,16 @@ sinnvolle Ergebnisse zu liefern (siehe Aufgabenstellung "Cold Start") --
 pricing.py mischt diesen regelbasierten Score erst in einem zweiten Schritt
 mit der empirischen Liga-Kalibrierung.
 
-Alle vier Faktoren sind explizit GLEICH gewichtet (Nutzervorgabe) -- einzige
-Ausnahme ist die PKT/MIO-Effizienz, deren Gewicht mit steigendem Marktwert
-weiterhin bewusst sinkt (siehe ppm_efficiency_weight/Schlotterbeck-Beispiel),
-das ist eine separate, marktwertabhaengige Modulation und keine Abweichung
-von der Gleichgewichtung der vier Basisfaktoren."""
+Gewichtung (Nutzervorgabe, explizit NICHT gleich): Kauf-Rang 35% (bildet den
+langfristigen sportlichen Gesamtwert am besten ab), Startchance 30%
+(entscheidend fuer tatsaechliche Punkte), PKT/MIO-Effizienz 20%
+(Kaderoptimierung/Preis-Leistung), MW-Trend 15% (beeinflusst Overpay/
+Tradingwert, soll aber nie allein einen sportlich schwachen Nichtstarter zum
+Must-have machen). Es gibt bewusst KEINEN zusaetzlichen marktwertabhaengigen
+Weight-Fade auf die PKT/MIO-Effizienz mehr (fruehere ppm_efficiency_weight-
+Funktion entfernt) -- die Marktwertabhaengigkeit steckt bereits in den PPM-
+Schwellen selbst (PPM_TIERS/ppm_thresholds_for), ein zusaetzlicher Fade haette
+den Marktwert doppelt beruecksichtigt und teure Spieler kuenstlich bevorzugt."""
 from typing import Dict, List, Optional
 
 CATEGORY_ALL_IN = "all_in"
@@ -70,24 +75,6 @@ def start_probability_score(value: Optional[int], config: dict) -> float:
     return float(scores.get(str(value), scores.get("none", 0.5)))
 
 
-def ppm_efficiency_weight(market_value: Optional[float], config: dict) -> float:
-    """Wie stark die PKT/MIO-Effizienz noch zaehlt: faellt linear von 1.0 auf
-    ppm_efficiency_fade_min_weight zwischen den beiden konfigurierten
-    Marktwert-Grenzen -- ein teurer Topspieler darf ineffizienter sein
-    (Schlotterbeck-Beispiel), ohne dass die Effizienz komplett irrelevant wird."""
-    if market_value is None:
-        return 1.0
-    start = config["ppm_efficiency_fade_start_mv"]
-    end = config["ppm_efficiency_fade_end_mv"]
-    min_weight = config["ppm_efficiency_fade_min_weight"]
-    if market_value <= start:
-        return 1.0
-    if market_value >= end:
-        return min_weight
-    frac = (market_value - start) / (end - start)
-    return 1.0 - frac * (1.0 - min_weight)
-
-
 def ppm_score(ppm_value: Optional[float], thresholds: dict) -> float:
     """ppm_value = Punkte pro Million (also schon *1e6 skaliert, wie in der
     Spielerkartei angezeigt). Stueckweise linear zwischen den drei
@@ -108,20 +95,62 @@ def ppm_score(ppm_value: Optional[float], thresholds: dict) -> float:
     return min(1.0, 0.9 + 0.1 * min(1.0, (ppm_value - top) / max(top, 1.0)))
 
 
+# Stuetzpunkte fuer den ABSOLUTEN Tages-MW-Trend in Euro -> 0..1 (Nutzervorgabe,
+# Naeherungswerte aus der Aufgabenstellung geglaettet zu einer monoton
+# steigenden, stueckweise linearen Kurve statt harter Sprmuenge). Ergaenzt die
+# relative Komponente um den absoluten Euro-Betrag, weil ein Trend bei einem
+# teuren Spieler auch in absoluten Zahlen relevant sein kann, selbst wenn er
+# relativ zum Marktwert klein wirkt.
+_ABSOLUTE_TREND_ANCHORS = [
+    (-200_000.0, 0.00),
+    (-75_000.0, 0.20),
+    (0.0, 0.50),
+    (50_000.0, 0.55),
+    (150_000.0, 0.65),
+    (300_000.0, 0.85),
+    (600_000.0, 1.00),
+]
+
+
+def _interpolate(x: float, anchors: List[tuple]) -> float:
+    if x <= anchors[0][0]:
+        return anchors[0][1]
+    if x >= anchors[-1][0]:
+        return anchors[-1][1]
+    for (x0, y0), (x1, y1) in zip(anchors, anchors[1:]):
+        if x0 <= x <= x1:
+            frac = (x - x0) / (x1 - x0) if x1 != x0 else 0.0
+            return y0 + frac * (y1 - y0)
+    return anchors[-1][1]
+
+
+def _relative_trend_score(daily_pct: float) -> float:
+    """0.5 bei 0%/Tag, saettigt bei +-5%/Tag auf 1.0/0.0 (dieselbe Steigung wie
+    zuvor, nur ueber den vollen 0..1-Bereich statt eng um 0.5 gedeckelt)."""
+    return 0.5 + max(-0.5, min(0.5, daily_pct / 10.0))
+
+
+def _absolute_trend_score(market_value_change_day: float) -> float:
+    return _interpolate(market_value_change_day, _ABSOLUTE_TREND_ANCHORS)
+
+
 def market_value_trend_score(market_value_change_day: Optional[float], market_value: Optional[float], acceleration: Optional[float]) -> float:
-    """Relativer Tages-Trend in Prozent des Marktwerts -- so wirkt derselbe
-    absolute Euro-Betrag bei einem guenstigen Spieler automatisch staerker als
-    bei einem teuren (siehe Aufgabenstellung). Bewusst eng gedeckelt (+-0.3 um
-    den neutralen Wert 0.5), damit dieser Faktor den sportlichen Wert nicht
-    dominiert."""
+    """Kombiniert eine relative (Prozent vom Marktwert, 60%) und eine absolute
+    (Euro/Tag, 40%) Komponente -- die relative Komponente sorgt dafuer, dass
+    derselbe absolute Betrag bei einem guenstigen Spieler staerker wirkt als
+    bei einem teuren, die absolute Komponente sorgt dafuer, dass ein grosser
+    Euro-Betrag bei einem teuren Spieler trotzdem noch zaehlt, auch wenn er
+    relativ klein erscheint (Nutzervorgabe). Beschleunigung/Bremsung bleibt ein
+    kleiner Modifier (+-0.05), das Endergebnis wird auf 0..1 begrenzt."""
     if market_value_change_day is None or not market_value:
         return 0.5
     daily_pct = (market_value_change_day / market_value) * 100.0
-    base = max(-0.30, min(0.30, daily_pct / 10.0))
-    accel_bonus = 0.0
-    if acceleration is not None and base > 0:
-        accel_bonus = 0.05 if acceleration > 0 else (-0.05 if acceleration < 0 else 0.0)
-    return max(0.0, min(1.0, 0.5 + base + accel_bonus))
+    relative = _relative_trend_score(daily_pct)
+    absolute = _absolute_trend_score(market_value_change_day)
+    score = relative * 0.60 + absolute * 0.40
+    if acceleration:
+        score += 0.05 if acceleration > 0 else -0.05
+    return max(0.0, min(1.0, score))
 
 
 def detect_special_cases(row: dict, snapshot_history: Optional[List[dict]]) -> List[str]:
@@ -160,7 +189,6 @@ def attractiveness(row: dict, snapshot_history: Optional[List[dict]], trend: dic
     ppm_value = row.get("points_per_value")
     ppm_value_per_mio = ppm_value * 1_000_000 if ppm_value is not None else None
     ppm_sc = ppm_score(ppm_value_per_mio, ppm_thresholds_for(row.get("market_value")))
-    ppm_w = ppm_efficiency_weight(row.get("market_value"), config)
 
     trend_sc = market_value_trend_score(
         row.get("market_value_change_day"), row.get("market_value"), (trend or {}).get("acceleration")
@@ -170,7 +198,7 @@ def attractiveness(row: dict, snapshot_history: Optional[List[dict]], trend: dic
     weighted_terms = [
         (sp_score, weights["start_probability_weight"]),
         (rank_score, weights["rank_tier_weight"]),
-        (ppm_sc, weights["ppm_efficiency_weight"] * ppm_w),
+        (ppm_sc, weights["ppm_efficiency_weight"]),
         (trend_sc, weights["market_value_trend_weight"]),
     ]
     total_weight = sum(w for _, w in weighted_terms) or 1.0
@@ -202,7 +230,6 @@ def attractiveness(row: dict, snapshot_history: Optional[List[dict]], trend: dic
             "start_probability": sp_score,
             "rank_tier": rank_score,
             "ppm_efficiency": ppm_sc,
-            "ppm_efficiency_weight": ppm_w,
             "market_value_trend": trend_sc,
         },
         "special_cases": special_cases,
