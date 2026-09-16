@@ -71,29 +71,90 @@ DEFAULTS: Dict[str, Any] = {
     # absolute Punkte und begrenzte Startelfplaetze bei absoluten Elite-
     # Spielern einen eigenen Wert haben.
     "elite_ppm_min_relaxation": 0.85,
-    # "Vergleichbar" (similarity.py) ist explizit hart auf zwei Kriterien
-    # reduziert: Marktwertfenster (similarity_mv_window_pct) + gleiche
-    # Position. Von den Treffern zaehlen nur die zeitlich juengsten max_k
-    # ("die letzten zehn vergleichbaren Transfers", rein chronologisch sortiert
-    # statt nach Aehnlichkeit) -- haelt das Modell aktuell und stabil gegen
-    # einzelne neue Ausreisser. target_n = max_k, weil das Fenster bei zehn
-    # Treffern voll "eingeschwungen" ist.
-    "similar_transfers_target_n": 10,
-    "similar_transfers_max_k": 10,
-    # Marktwertfenster je Marktwertklasse (market_value_classes) in Prozent
-    # des Zielmarktwerts: eng bei niedrigem Marktwert, weit bei hohem
-    # Marktwert (siehe Modul-Docstring similarity.py). Ersetzt die fruehere
-    # gewichtete Distanz ueber Rang/Startchance/PPM/Trend -- diese fliessen
-    # nicht mehr in die Vergleichbarkeit ein.
-    "similarity_mv_window_pct": [15, 20, 25, 30, 40, 50, 60, 75],
-    # Zeitgewichtung (Tage seit Transfer -> Gewicht) fuer calibration.py +
-    # similarity.py, aus der Aufgabenstellung uebernommen (7 Tage stark, 8-21
-    # Tage mittel, aelter schwach).
-    "recency_weight_days": [
-        {"max_days": 7, "weight": 1.0},
-        {"max_days": 21, "weight": 0.5},
-        {"max_days": None, "weight": 0.2},
-    ],
+    # "Vergleichbar" (similarity.py) ist ein GEWICHTETER, kontinuierlicher
+    # Similarity-Score (0..1) ueber mehrere Dimensionen -- kein binaeres
+    # Marktwertfenster/Positions-Kriterium mehr (explizite Nutzervorgabe:
+    # "keine groben Vergleichsgruppen mehr, Distanz statt Kategorien").
+    # Gewichte: Startchance bildet ab, wie sicher der Spieler DAMALS spielte
+    # (25%), Kauf-Rang die sportliche Gesamtattraktivitaet (20% -- kauf_rank
+    # enthaelt bereits Form/Gegner/Restprogramm, siehe ranking/scoring.py,
+    # "Teamstaerke" unten ist daher bewusst klein, keine Doppelgewichtung),
+    # Marktwert-Klasse (20%, log-skaliert: 9 vs. 11 Mio. naeher als 9 vs.
+    # 25 Mio.), MW-Trend (15%, reuse scoring.market_value_trend_score),
+    # PPM-Effizienz (10%, reuse scoring.ppm_score), erwartete Performance
+    # (5%, season_avg) und Teamstaerke/Rolle (5%, team_form). Summe = 1.0.
+    "similarity_weights": {
+        "start_probability": 0.25,
+        "rank_tier": 0.20,
+        "market_value": 0.20,
+        "market_value_trend": 0.15,
+        "ppm_efficiency": 0.10,
+        "expected_performance": 0.05,
+        "team_strength": 0.05,
+    },
+    # Mindest-Similarity (0..1, siehe similarity.similarity_score), unterhalb
+    # derer ein historischer Transfer NICHT als Vergleich zaehlt -- verhindert,
+    # dass bei wenigen Kandidaten schlechte Vergleiche "aufgefuellt" werden,
+    # nur um eine Mindestanzahl zu erreichen. Startwert, zur Kalibrierung
+    # anhand echter Ligadaten siehe backtest.py.
+    "similarity_min_score": 0.55,
+    # Harte Ausschlusskriterien (similarity.py), ZUSAETZLICH zur Distanz oben
+    # -- manche Unterschiede sind so fundamental, dass kein Gewicht sie
+    # aufwiegen darf (explizite Nutzervorgabe, siehe Modul-Docstring).
+    "similarity_hard_cutoffs": {
+        # Sicher/Erwartet (1/2) darf nie mit Unwahrscheinlich/Ausgeschlossen
+        # (4/5) verglichen werden, unabhaengig von allen anderen Dimensionen.
+        "exclude_start_probability_bucket_clash": True,
+        # Maximales Marktwert-Verhaeltnis (Prozent des kleineren MW) je
+        # Marktwertklasse (market_value_classes) -- deutlich weiter gefasst
+        # als die fruehere similarity_mv_window_pct, weil hier nur noch die
+        # absolute Notbremse gezogen wird; die eigentliche Feinabstufung
+        # passiert ueber die kontinuierliche market_value-Distanz oben.
+        "max_market_value_ratio_pct": [40, 50, 60, 75, 100, 120, 150, 200],
+        # MW-Trend-Score (0..1, 0.5=flach) gilt oberhalb/unterhalb dieser
+        # Schwellen als "stark steigend"/"stark fallend" -- ein stark
+        # steigender und ein stark fallender Spieler duerfen sich nicht als
+        # Hauptvergleich dienen.
+        "trend_polarity_high": 0.75,
+        "trend_polarity_low": 0.25,
+        # Ein langfristig verletzter Spieler (Status "verletzt"/"Reha") darf
+        # nicht mit einem fitten Spieler verglichen werden (und umgekehrt).
+        "exclude_injury_mismatch": True,
+    },
+    # Ziel-/Obergrenze fuer die Anzahl beruecksichtigter Vergleichstransfers
+    # (similarity.py): es werden bis zu max_k der aehnlichsten Transfers
+    # oberhalb similarity_min_score verwendet -- NICHT zwangsweise
+    # aufgefuellt, wenn weniger vorhanden sind (siehe Aufgabenstellung
+    # "10-20, wenn nur 7 gut sind, dann 7"). target_n ist der Nenner der
+    # Confidence-Berechnung (pricing._confidence): bei max_k erreichten,
+    # validen Vergleichen ist das Vertrauen "voll eingeschwungen".
+    "similar_transfers_target_n": 20,
+    "similar_transfers_max_k": 20,
+    # Halbwertszeit (Tage) fuer die Aktualitaets-Gewichtung eines Transfers
+    # (stats.decay_weight) -- ersetzt die fruehere Stufenfunktion durch eine
+    # kontinuierliche Kurve (explizite Nutzervorgabe: "keine starren
+    # Stufen, sondern Halbwertszeit"). Bei 30 Tagen hat ein 30 Tage alter
+    # Transfer noch 50% Gewicht, ein 60 Tage alter noch 25%, usw.
+    "recency_half_life_days": 30.0,
+    # Wenn ein Transfer laut Activity-Feed OHNE Konkurrenzgebot ("coc"/
+    # bid_count == 0) gewonnen wurde, ist der gezahlte Preis eher ein
+    # unkontrollierter Angebotspreis als ein echtes Wettbewerbsergebnis --
+    # Kickbase liefert keine Gebotshoehen, nur die Anzahl der Gebote, ein
+    # echtes "zweithoechstes Gebot" ist also nicht verfuegbar (siehe
+    # transfers.py-Docstring). Solche Transfers fliessen mit reduziertem statt
+    # vollem Gewicht ein.
+    "bid_count_no_competition_weight": 0.85,
+    # Ziel-Perzentil der (similarity- und zeitgewichteten) historischen
+    # Overpay-Verteilung je Attraktivitaetskategorie -- ersetzt den fruehen
+    # linearen Cold-Start-Blend (siehe pricing.py). Startwerte aus der
+    # Aufgabenstellung (⚪~50., 🟢~60-65., ⭐~75-80., 🔥~85-90., hier als
+    # Punktwerte), zur Kalibrierung anhand echter Ligadaten siehe backtest.py.
+    "category_target_percentile": {
+        "marktwert": 50,
+        "ueber_marktwert": 62,
+        "will_haben": 77,
+        "all_in": 87,
+    },
     # Transfers, die beim allerersten Import "rueckwirkend" entdeckt wurden
     # (also mit dem MW/Rang von HEUTE statt vom echten Transfer-Zeitpunkt
     # angereichert werden mussten, siehe transfers.py) fliessen mit reduziertem

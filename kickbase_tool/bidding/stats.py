@@ -5,7 +5,7 @@ Marktwertklassen. Bewusst ohne numpy/scipy -- die Datenmengen sind klein
 hier nicht.
 """
 from datetime import datetime, timezone
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 
 def weighted_percentile(values_with_weights: Sequence[Tuple[float, float]], percentile: float) -> Optional[float]:
@@ -79,23 +79,50 @@ def drop_extreme_outliers(
 
 
 def robust_weighted_stats(values_with_weights: Sequence[Tuple[float, float]], mad_multiplier: float = 3.0) -> dict:
-    """Einmal-Aufruf, der die komplette Robustheits-Pipeline aus der
-    Aufgabenstellung durchlaeuft: Ausreisser via MAD verwerfen, dann
-    gewichteten Median + 25./75. Perzentil auf den bereinigten Daten. `n`
-    zaehlt die tatsaechlich verwendeten (nach Ausreisser-Filterung) Punkte,
-    `n_raw` alle eingegangenen -- fuer Confidence-Berechnung ist `n` massgeblich."""
+    """Einmal-Aufruf, der die komplette Robustheits-Pipeline durchlaeuft:
+    Ausreisser via MAD verwerfen, dann gewichteter Median + 25./75. Perzentil
+    (Rueckwaertskompatibilitaet fuer bestehende Aufrufer) PLUS die volle
+    Perzentil-Palette (siehe PERCENTILE_LEVELS/percentile_bundle, Punkt 10 der
+    Aufgabenstellung: "nicht nur den einfachen Durchschnitt/Median") unter
+    `percentiles` (Schluessel = Prozentwert als float, z.B. 75.0). `n` zaehlt
+    die tatsaechlich verwendeten (nach Ausreisser-Filterung) Punkte, `n_raw`
+    alle eingegangenen -- fuer Confidence-Berechnung ist `n` massgeblich."""
     raw = [(v, w) for v, w in values_with_weights if v is not None and w]
     cleaned = drop_extreme_outliers(raw, mad_multiplier=mad_multiplier)
     if not cleaned:
-        return {"median": None, "p25": None, "p75": None, "n": 0, "n_raw": len(raw), "effective_weight": 0.0}
+        return {
+            "median": None, "p25": None, "p75": None, "percentiles": {level: None for level in PERCENTILE_LEVELS},
+            "n": 0, "n_raw": len(raw), "effective_weight": 0.0, "cleaned_points": [],
+        }
     return {
         "median": weighted_median(cleaned),
         "p25": weighted_percentile(cleaned, 25.0),
         "p75": weighted_percentile(cleaned, 75.0),
+        "percentiles": percentile_bundle(cleaned),
         "n": len(cleaned),
         "n_raw": len(raw),
         "effective_weight": sum(w for _, w in cleaned),
+        # Ausreisser-bereinigte Punkte, damit ein Aufrufer (z.B.
+        # pricing.category_target_value) spaeter noch ein beliebiges,
+        # NICHT in PERCENTILE_LEVELS enthaltenes Perzentil (z.B. 62. oder
+        # 77.) berechnen kann, ohne die Bereinigung zu wiederholen.
+        "cleaned_points": cleaned,
     }
+
+
+def target_percentile_value(stats_result: dict, percentile: float) -> Optional[float]:
+    """Liest ein beliebiges Perzentil aus einem bereits berechneten
+    `robust_weighted_stats`-Ergebnis -- nutzt `percentiles` (schneller
+    Lookup), wenn `percentile` dort exakt vorkommt, sonst `cleaned_points`
+    fuer eine direkte Berechnung (z.B. die Kategorie-Zielperzentile 62/77/87
+    aus category_target_percentile, die nicht in PERCENTILE_LEVELS stecken)."""
+    percentiles = stats_result.get("percentiles") or {}
+    if percentile in percentiles:
+        return percentiles[percentile]
+    cleaned = stats_result.get("cleaned_points") or []
+    if not cleaned:
+        return None
+    return weighted_percentile(cleaned, percentile)
 
 
 def parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -140,13 +167,36 @@ def market_value_class_label(market_value: Optional[float], class_bounds: Sequen
     return MARKET_VALUE_CLASS_LABELS[idx] if idx < len(MARKET_VALUE_CLASS_LABELS) else MARKET_VALUE_CLASS_LABELS[-1]
 
 
-def recency_weight(days_ago: Optional[float], schedule: Sequence[dict]) -> float:
-    """schedule: [{"max_days": 7, "weight": 1.0}, {"max_days": 21, "weight": 0.5},
-    {"max_days": None, "weight": 0.2}] -- erste passende Stufe gewinnt."""
+def decay_weight(days_ago: Optional[float], half_life_days: float) -> float:
+    """Kontinuierliche Exponential-Decay-Gewichtung (Halbwertszeit in Tagen)
+    statt einer Stufenfunktion -- explizite Nutzervorgabe ("keine starren
+    Stufen, sondern eine zeitliche Halbwertszeit"). weight = 0.5 ** (days_ago
+    / half_life_days): bei half_life_days=30 hat ein 30 Tage alter Transfer
+    noch 50% Gewicht, ein 60 Tage alter noch 25%, ein frischer (0 Tage) volles
+    Gewicht. `days_ago=None` (z.B. Datum fehlt) wird als "gerade eben" (0
+    Tage, volles Gewicht) behandelt statt den Datenpunkt zu bestrafen --
+    dieselbe Grundhaltung wie bei anderen fehlenden Werten in diesem Modul
+    (siehe start_probability_score's `none`-Fallback)."""
     if days_ago is None:
         days_ago = 0.0
-    for stage in schedule:
-        max_days = stage.get("max_days")
-        if max_days is None or days_ago <= max_days:
-            return float(stage.get("weight", 1.0))
-    return float(schedule[-1].get("weight", 1.0)) if schedule else 1.0
+    if not half_life_days or half_life_days <= 0:
+        return 1.0
+    return 0.5 ** (max(0.0, days_ago) / half_life_days)
+
+
+# Perzentile, die calibration.py/pricing.py aus einer (similarity- und
+# zeitgewichteten) Overpay-Verteilung ziehen koennen -- ersetzt den fruehen
+# reinen Median/p25/p75 (siehe Aufgabenstellung Punkt 10: "nicht nur den
+# einfachen Durchschnitt/Median"). 50 bleibt enthalten, weil die
+# ⚪-Kategorie weiterhin ungefaehr das "typische Marktniveau" abbilden soll.
+PERCENTILE_LEVELS = [50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0]
+
+
+def percentile_bundle(values_with_weights: Sequence[Tuple[float, float]], levels: Sequence[float] = PERCENTILE_LEVELS) -> Dict[float, Optional[float]]:
+    """Berechnet mehrere Perzentile in einem Rutsch (identische Sortierung/
+    Gewichtsachse wie weighted_percentile, nur einmal aufgebaut statt pro
+    Perzentil neu) -- Schluessel sind die rohen Prozentwerte aus `levels`."""
+    points = [(v, w) for v, w in values_with_weights if v is not None and w is not None and w > 0]
+    if not points:
+        return {level: None for level in levels}
+    return {level: weighted_percentile(points, level) for level in levels}

@@ -133,3 +133,56 @@ def test_ingest_new_transfers_no_league_id_returns_existing_log_unchanged(tmp_pa
     log = ingest_new_transfers({}, client, make_settings(league_id=None), path=path)
     assert log == []
     assert client.calls == []  # never even attempted the request
+
+
+def test_ingest_new_transfers_uses_historical_snapshot_not_current_row_for_fresh_events(tmp_path):
+    # Regressionstest fuer die Snapshot-basierte Historisierung (Modul-
+    # Docstring): ein frischer (nicht initial-backfilled) Transfer muss den
+    # Marktwert VOM TRANSFERZEITPUNKT verwenden, nicht den aktuellen -- dafuer
+    # muss zuerst ein Log existieren (sonst greift is_initial_backfill).
+    path = tmp_path / "transfers.json"
+    seed_client = FakeClient([purchase_activity("seed", "999", "Seed", 1_000_000, dt="2026-08-01T00:00:00Z")])
+    ingest_new_transfers({"999": {"market_value": 1_000_000, "kauf_rank": 1, "start_probability": 1,
+                                   "points_per_value": 1e-6, "market_value_change_day": 0,
+                                   "position": "MF", "status": "fit"}}, seed_client, make_settings(), path=path)
+
+    snapshot_store = {
+        "100": [
+            {"date": "2026-09-01", "market_value": 4_000_000, "kauf_rank": 60, "start_probability": 1,
+             "points_per_value": 1e-6, "market_value_change_day": 0, "position": "MF", "status": "fit"},
+            {"date": "2026-09-14", "market_value": 4_500_000, "kauf_rank": 55, "start_probability": 1,
+             "points_per_value": 1.1e-6, "market_value_change_day": 10_000, "position": "MF", "status": "fit"},
+        ]
+    }
+    # Transfer geschah am 14.09., die AKTUELLE (heutige) Row zeigt aber schon
+    # einen viel hoeheren Marktwert (z.B. 2 Tage spaeter entdeckt/verarbeitet).
+    current_row = {"market_value": 6_000_000, "kauf_rank": 40, "start_probability": 1,
+                   "points_per_value": 1.3e-6, "market_value_change_day": 50_000,
+                   "position": "MF", "status": "fit"}
+    activities = [purchase_activity("a1", "100", "Kurti", 5_000_000, dt="2026-09-14T18:00:00Z")]
+    client = FakeClient(activities)
+
+    log = ingest_new_transfers({"100": current_row}, client, make_settings(), snapshot_store=snapshot_store, path=path)
+
+    record = next(r for r in log if r["id"] == "a1")
+    assert record["market_value"] == 4_500_000  # Snapshot vom Transfertag, NICHT die aktuelle Row (6 Mio.)
+    assert record["backfilled"] is False
+
+
+def test_ingest_new_transfers_falls_back_to_current_row_without_matching_snapshot(tmp_path):
+    path = tmp_path / "transfers.json"
+    seed_client = FakeClient([purchase_activity("seed", "999", "Seed", 1_000_000, dt="2026-08-01T00:00:00Z")])
+    ingest_new_transfers({"999": {"market_value": 1_000_000, "kauf_rank": 1, "start_probability": 1,
+                                   "points_per_value": 1e-6, "market_value_change_day": 0,
+                                   "position": "MF", "status": "fit"}}, seed_client, make_settings(), path=path)
+
+    current_row = {"market_value": 6_000_000, "kauf_rank": 40, "start_probability": 1,
+                   "points_per_value": 1.3e-6, "market_value_change_day": 50_000,
+                   "position": "MF", "status": "fit"}
+    activities = [purchase_activity("a1", "100", "Kurti", 5_000_000, dt="2026-09-14T18:00:00Z")]
+    client = FakeClient(activities)
+
+    log = ingest_new_transfers({"100": current_row}, client, make_settings(), snapshot_store={}, path=path)
+
+    record = next(r for r in log if r["id"] == "a1")
+    assert record["market_value"] == 6_000_000  # kein Snapshot vorhanden -> Fallback auf aktuelle Row

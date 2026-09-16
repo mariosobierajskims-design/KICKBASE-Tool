@@ -47,7 +47,7 @@ def _compute_bids(
     rows_by_pid = {row["id"]: row for row in rows if row.get("id") is not None}
 
     snapshot_store = record_snapshot(rows, path=snapshot_path)
-    transfer_log = ingest_new_transfers(rows_by_pid, client, settings, path=transfer_log_path)
+    transfer_log = ingest_new_transfers(rows_by_pid, client, settings, snapshot_store=snapshot_store, path=transfer_log_path)
 
     market_factor = calibration.overall_market_factor(transfer_log, config)
     class_tier_stats = calibration.market_stats_by_class_and_tier(transfer_log, config)
@@ -58,7 +58,7 @@ def _compute_bids(
         trend = trend_stats(history)
 
         attractiveness_result = scoring.attractiveness(row, snapshot_history=history, trend=trend, config=config)
-        similar_result = similarity.similar_transfers(row, transfer_log, config)
+        similar_result = similarity.similar_transfers(row, transfer_log, config, target_trend=trend)
         tier_stats = calibration.lookup_class_tier_stats(
             class_tier_stats, row.get("market_value"), row.get("kauf_rank"), config
         )

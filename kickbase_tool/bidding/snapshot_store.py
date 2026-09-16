@@ -25,7 +25,14 @@ from typing import Dict, List, Optional
 DEFAULT_STORE_PATH = Path("league_history/player_snapshots.json")
 MAX_HISTORY_PER_PLAYER = 10
 
-SNAPSHOT_FIELDS = ["market_value", "kauf_rank", "start_probability", "points_per_value", "market_value_change_day"]
+SNAPSHOT_FIELDS = [
+    "market_value", "kauf_rank", "start_probability", "points_per_value", "market_value_change_day",
+    # Ab hier nicht fuer trend_stats() genutzt, sondern damit transfers.py
+    # (_historical_row) bei der Anreicherung frischer Transfers eine
+    # vollstaendige historische Row zusammenstellen kann (siehe
+    # transfers._SNAPSHOT_ROW_FIELDS/Modul-Docstring dort).
+    "position", "status", "season_avg", "team_form",
+]
 
 
 def _today_str() -> str:

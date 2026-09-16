@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
 from kickbase_tool.bidding.calibration import (
+    category_target_value,
     lookup_class_tier_stats,
     market_stats_by_class_and_tier,
     overall_market_factor,
     record_weight,
 )
 from kickbase_tool.bidding.config import load_bidding_config
+from kickbase_tool.bidding.stats import robust_weighted_stats
 
 CONFIG = load_bidding_config()
 NOW = datetime(2026, 9, 14, tzinfo=timezone.utc)
@@ -35,6 +37,48 @@ def test_record_weight_reduced_for_backfilled_records():
     backfilled = record_weight(make_transfer(10.0, days_ago=1, backfilled=True), CONFIG, now=NOW)
     assert backfilled < normal
     assert backfilled == normal * CONFIG["backfilled_weight_factor"]
+
+
+def test_record_weight_reduced_when_no_competing_bid():
+    # Kickbase liefert keine Gebotshoehen, nur die Anzahl der Gebote --
+    # bid_count == 0 heisst "kein bekanntes Konkurrenzgebot", also eher ein
+    # unkontrollierter Angebotspreis als ein Wettbewerbsergebnis.
+    with_competition = record_weight({**make_transfer(10.0, days_ago=1), "bid_count": 1}, CONFIG, now=NOW)
+    without_competition = record_weight({**make_transfer(10.0, days_ago=1), "bid_count": 0}, CONFIG, now=NOW)
+    assert without_competition < with_competition
+    assert without_competition == with_competition * CONFIG["bid_count_no_competition_weight"]
+
+
+def test_record_weight_unknown_bid_count_is_not_penalized():
+    unknown = record_weight({**make_transfer(10.0, days_ago=1), "bid_count": None}, CONFIG, now=NOW)
+    with_competition = record_weight({**make_transfer(10.0, days_ago=1), "bid_count": 1}, CONFIG, now=NOW)
+    assert unknown == with_competition
+
+
+def test_category_target_value_increases_with_more_aggressive_category():
+    values = [(v, 1.0) for v in [3, 5, 7, 8, 10, 11, 13, 15, 19, 27]]
+    stats = robust_weighted_stats(values)
+    ordered = [
+        category_target_value(stats, "marktwert", CONFIG),
+        category_target_value(stats, "ueber_marktwert", CONFIG),
+        category_target_value(stats, "will_haben", CONFIG),
+        category_target_value(stats, "all_in", CONFIG),
+    ]
+    assert ordered == sorted(ordered)
+    assert len(set(ordered)) == len(ordered)  # jede Kategorie ergibt einen anderen Zielwert
+
+
+def test_category_target_value_falls_back_to_median_without_percentile_data():
+    # Handgebautes Dict ohne "percentiles"/"cleaned_points" (z.B. in aelteren
+    # Tests/Aufrufern) darf nicht None zurueckgeben, sondern degradiert auf
+    # den Median.
+    stats = {"n": 5, "median_pct": 12.0}
+    assert category_target_value(stats, "all_in", CONFIG) == 12.0
+
+
+def test_category_target_value_none_when_no_data():
+    assert category_target_value({"n": 0}, "all_in", CONFIG) is None
+    assert category_target_value(None, "all_in", CONFIG) is None
 
 
 def test_overall_market_factor_neutral_on_empty_log():

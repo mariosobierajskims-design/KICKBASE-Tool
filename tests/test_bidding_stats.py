@@ -1,7 +1,8 @@
 from kickbase_tool.bidding.stats import (
+    decay_weight,
     drop_extreme_outliers,
     market_value_class_label,
-    recency_weight,
+    percentile_bundle,
     robust_weighted_stats,
     weighted_median,
     weighted_percentile,
@@ -71,10 +72,36 @@ def test_market_value_class_label_none_is_none():
     assert market_value_class_label(None, MARKET_VALUE_CLASS_BOUNDS) is None
 
 
-def test_recency_weight_stages():
-    schedule = [{"max_days": 7, "weight": 1.0}, {"max_days": 21, "weight": 0.5}, {"max_days": None, "weight": 0.2}]
-    assert recency_weight(3, schedule) == 1.0
-    assert recency_weight(7, schedule) == 1.0
-    assert recency_weight(15, schedule) == 0.5
-    assert recency_weight(100, schedule) == 0.2
-    assert recency_weight(None, schedule) == 1.0
+def test_decay_weight_half_life():
+    assert decay_weight(0, 30.0) == 1.0
+    assert decay_weight(30, 30.0) == 0.5
+    assert decay_weight(60, 30.0) == 0.25
+    assert decay_weight(None, 30.0) == 1.0  # fehlendes Datum -> "gerade eben", nicht bestraft
+
+
+def test_decay_weight_monotonically_decreasing():
+    weights = [decay_weight(d, 30.0) for d in [0, 10, 20, 30, 60, 90]]
+    assert weights == sorted(weights, reverse=True)
+
+
+def test_decay_weight_zero_half_life_is_no_op():
+    assert decay_weight(100, 0.0) == 1.0
+
+
+def test_percentile_bundle_returns_all_levels():
+    values = [(v, 1.0) for v in range(1, 21)]
+    bundle = percentile_bundle(values)
+    assert set(bundle.keys()) == {50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0}
+    assert bundle[50.0] < bundle[75.0] < bundle[90.0]
+
+
+def test_percentile_bundle_empty_is_all_none():
+    bundle = percentile_bundle([])
+    assert all(v is None for v in bundle.values())
+
+
+def test_robust_weighted_stats_includes_percentile_bundle():
+    values = [(v, 1.0) for v in range(1, 21)]
+    stats = robust_weighted_stats(values)
+    assert stats["percentiles"][75.0] is not None
+    assert stats["median"] < stats["percentiles"][75.0] < stats["percentiles"][90.0]
