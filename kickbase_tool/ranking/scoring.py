@@ -41,9 +41,12 @@ CATEGORY_DEFINITIONS = {
     # them) is assumed good for our player, mirroring opponent_form's "weaker
     # opponent = better" convention.
     "opponent_remaining_schedule_difficulty": (lambda pm: pm.opponent_remaining_schedule_difficulty, False),
-    # A weak/declining opponent (high raw momentum value) is good for us --
-    # inverse of team_momentum's own "lower = stronger and rising" meaning.
-    "opponent_momentum": (lambda pm: pm.opponent_momentum, True),
+    # Nutzer-Korrektur: team_momentum ist jetzt eine rohe Punktedifferenz
+    # (F_current - F_current-2, siehe metrics/calculations.py::team_momentum),
+    # positiv = Team gewinnt an Form. Ein GEGNER, der an Form gewinnt (hoher
+    # Wert), ist schlecht fuer uns -- daher higher_is_better=False (ein
+    # abfallender/schwacher Gegner, niedriger oder negativer Wert, ist gut).
+    "opponent_momentum": (lambda pm: pm.opponent_momentum, False),
 }
 
 # Shared by all three rankings; Aufstellung adds market_value (see below),

@@ -9,6 +9,18 @@ from kickbase_tool.util import mean, rank_with_ties
 RECENT_FORM_WINDOW = 5
 TEAM_FORM_WINDOW = 5
 UPCOMING_FIXTURES_WINDOW = 5
+# Wie viele rollierende TEAM_FORM_WINDOW-Formwerte in die geglaettete
+# Mannschaftsform einfliessen (Nutzer-Korrektur: Team-Form ist kein reiner
+# Letzte-5-Spiele-Schnitt mehr, sondern selbst schon ein "Zwischenwert" F_d,
+# der ueber die letzten bis zu TEAM_FORM_SMOOTHING_WINDOW dieser Formwerte
+# gemittelt wird -- siehe team_form()).
+TEAM_FORM_SMOOTHING_WINDOW = 5
+# Gestaffelte Gewichte fuers Restprogramm des EIGENEN Teams (Nutzer-Korrektur):
+# der naechste Gegner zaehlt am staerksten, jeder weitere Gegner abgestuft
+# weniger -- statt eines reinen (ungewichteten) Durchschnitts der naechsten
+# UPCOMING_FIXTURES_WINDOW Gegner-Tabellenplaetze. Reihenfolge = Reihenfolge
+# der Spieltage (naechster zuerst), Laenge folgt UPCOMING_FIXTURES_WINDOW.
+UPCOMING_FIXTURES_WEIGHTS = [5, 4, 3, 2, 1]
 
 
 @dataclass
@@ -55,21 +67,26 @@ class PlayerMetrics:
     next_match_is_home: Optional[bool]
     # Informational only (not a ranking category, see README) -- the next
     # UPCOMING_FIXTURES_WINDOW opponents with name/table position/venue, and
-    # the average opponent table position across them.
+    # a GESTAFFELT gewichteter Durchschnitt der Gegner-Tabellenplaetze
+    # (Nutzer-Korrektur: der naechste Gegner zaehlt am staerksten, siehe
+    # UPCOMING_FIXTURES_WEIGHTS/_weighted_position_average) statt eines
+    # reinen Durchschnitts.
     upcoming_opponents: List[dict]
     remaining_schedule_difficulty: Optional[float]
-    # Same computation as remaining_schedule_difficulty, but for the next
-    # OPPONENT's own remaining schedule instead of the player's own team --
-    # added as an independent ranking category on explicit user request.
+    # Same computation as remaining_schedule_difficulty, but UNGEWICHTET
+    # (reiner Durchschnitt) und fuer die eigene Restlaufzeit des naechsten
+    # OPPONENTEN statt des eigenen Teams -- bleibt bewusst ungewichtet, da
+    # dieser Wert (anders als remaining_schedule_difficulty) direkt in
+    # ranking/scoring.py als Ranking-Kategorie einfliesst und die Gewichtung
+    # nur fuer die reine Info-Spalte des eigenen Teams angefragt wurde.
     opponent_remaining_schedule_difficulty: Optional[float]
 
-    # "Formsteigerung" (momentum): current rolling-5-game form rank (1=best
-    # among all 18 teams) plus the change vs. the same rank two matchdays
-    # ago -- low value = strong AND still improving, so a bad recent game
-    # doesn't by itself flag a player at a genuinely in-form club. See
-    # README "Formsteigerung" for the exact definition. None until enough
-    # matchdays exist (needs >= 7: a 5-game window plus a 2-matchday-old
-    # comparison point).
+    # "Formsteigerung" (Nutzer-Korrektur): Differenz zwischen dem aktuellsten
+    # rollierenden 5-Spiele-Formwert (F_current, siehe team_form()) und dem
+    # Formwert TREND_GAP Spieltage zuvor (F_current-2) -- rohe Punktedifferenz,
+    # NICHT mehr rang-basiert. Positiv = Team gewinnt an Form, negativ = Team
+    # verliert an Form. None, bis mindestens 3 vollstaendige rollierende
+    # Formwerte existieren (siehe team_momentum()).
     team_momentum: Optional[float]
     opponent_momentum: Optional[float]
 
@@ -117,11 +134,46 @@ def _team_matchdays(team_points: TeamPointsByMatchday, team_id: str) -> List[int
     return sorted(md for (tid, md) in team_points if tid == team_id)
 
 
-def team_form(team_points: TeamPointsByMatchday, team_id: str, window: int = TEAM_FORM_WINDOW) -> Optional[float]:
-    matchdays = _team_matchdays(team_points, team_id)[-window:]
+def _rolling_form_value(
+    team_points: TeamPointsByMatchday, team_id: str, end_matchday: int, window: int = TEAM_FORM_WINDOW
+) -> Optional[float]:
+    """Schritt 1 (Nutzer-Korrektur): Durchschnitt der KICKBASE-Punkte des Teams
+    aus genau den `window` Spieltagen, die auf `end_matchday` enden -- None,
+    falls dieses Fenster noch nicht vollstaendig gespielt ist."""
+    window_mds = range(end_matchday - window + 1, end_matchday + 1)
+    if not all((team_id, m) in team_points for m in window_mds):
+        return None
+    return mean(team_points[(team_id, m)] for m in window_mds)
+
+
+def team_form(
+    team_points: TeamPointsByMatchday,
+    team_id: str,
+    window: int = TEAM_FORM_WINDOW,
+    smoothing_window: int = TEAM_FORM_SMOOTHING_WINDOW,
+) -> Optional[float]:
+    """Geglaettete Mannschaftsform (Nutzer-Korrektur): NICHT mehr der einfache
+    Durchschnitt der letzten `window` Spiele, sondern der Durchschnitt der
+    letzten bis zu `smoothing_window` rollierenden `window`-Spiele-Formwerte
+    (Schritt 1+2) -- z.B. bei Spieltag 12 mean(F8,F9,F10,F11,F12). Vor dem
+    ersten vollstaendigen Fenster (weniger als `window` Saisonspiele absolviert)
+    dient als Uebergangsloesung der einfache Durchschnitt aller bisher
+    gespielten Saisonspiele."""
+    matchdays = _team_matchdays(team_points, team_id)
     if not matchdays:
         return None
-    return mean(team_points[(team_id, md)] for md in matchdays)
+    latest_matchday = matchdays[-1]
+    rolling_values: List[float] = []
+    md = latest_matchday
+    while len(rolling_values) < smoothing_window and md >= window:
+        value = _rolling_form_value(team_points, team_id, md, window)
+        if value is None:
+            break
+        rolling_values.append(value)
+        md -= 1
+    if not rolling_values:
+        return mean(team_points[(team_id, m)] for m in matchdays)
+    return mean(rolling_values)
 
 
 def team_venue_form(
@@ -168,40 +220,29 @@ def build_form_table_ranks(team_points: TeamPointsByMatchday, all_team_ids: List
     return rank_with_ties(values, higher_is_better=True)
 
 
-def build_team_rolling_form_ranks(
-    team_points: TeamPointsByMatchday, all_team_ids: List[str], window: int = TEAM_FORM_WINDOW
-) -> Dict[str, Dict[int, float]]:
-    """For every matchday d where a full trailing `window`-matchday points sum
-    can be formed, ranks all teams that have one (1 = highest sum = best
-    form). Returns {team_id: {matchday: rank}}."""
-    matchdays = sorted({md for (_tid, md) in team_points})
-    ranks: Dict[str, Dict[int, float]] = {tid: {} for tid in all_team_ids}
-    for d in matchdays:
-        window_mds = range(d - window + 1, d + 1)
-        sums = {}
-        for tid in all_team_ids:
-            if all((tid, m) in team_points for m in window_mds):
-                sums[tid] = sum(team_points[(tid, m)] for m in window_mds)
-        if not sums:
-            continue
-        for tid, rk in rank_with_ties(sums, higher_is_better=True).items():
-            ranks[tid][d] = rk
-    return ranks
-
-
-def team_momentum(rolling_form_ranks: Dict[str, Dict[int, float]], team_id: str, trend_gap: int = 2) -> Optional[float]:
-    """"Formsteigerung": aktueller Form-Rang + (aktueller Form-Rang - Form-Rang
-    von vor `trend_gap` Spieltagen). Niedriger = besser UND im Aufwaertstrend."""
-    ranks_for_team = rolling_form_ranks.get(team_id) or {}
-    if not ranks_for_team:
+def team_momentum(
+    team_points: TeamPointsByMatchday,
+    team_id: str,
+    window: int = TEAM_FORM_WINDOW,
+    trend_gap: int = 2,
+) -> Optional[float]:
+    """"Formsteigerung" (Nutzer-Korrektur, Schritt 4): rohe Punktedifferenz
+    zwischen dem aktuellsten rollierenden `window`-Spiele-Formwert (F_current)
+    und dem Formwert `trend_gap` Spieltage zuvor (F_current-2) -- NICHT mehr
+    rang-basiert. Positiv = Team gewinnt an Form, negativ = verliert an Form.
+    Erst definiert, sobald mindestens 3 vollstaendige rollierende Formwerte
+    existieren (bei window=5/trend_gap=2 also ab Spieltag 7: F5,F6,F7)."""
+    matchdays = _team_matchdays(team_points, team_id)
+    if not matchdays:
         return None
-    current_matchday = max(ranks_for_team)
-    previous_matchday = current_matchday - trend_gap
-    if previous_matchday not in ranks_for_team:
+    latest_matchday = matchdays[-1]
+    if latest_matchday < window + trend_gap:
         return None
-    current_rank = ranks_for_team[current_matchday]
-    previous_rank = ranks_for_team[previous_matchday]
-    return current_rank + (current_rank - previous_rank)
+    current_value = _rolling_form_value(team_points, team_id, latest_matchday, window)
+    previous_value = _rolling_form_value(team_points, team_id, latest_matchday - trend_gap, window)
+    if current_value is None or previous_value is None:
+        return None
+    return current_value - previous_value
 
 
 def next_fixture_for_team(fixtures: List[Fixture], team_id: str) -> Optional[Fixture]:
@@ -225,12 +266,35 @@ def opponent_in_fixture(fixture: Fixture, team_id: str) -> str:
     return fixture.away_team_id if fixture.home_team_id == team_id else fixture.home_team_id
 
 
+def _weighted_position_average(opponents: List[dict], weights: List[float] = UPCOMING_FIXTURES_WEIGHTS) -> Optional[float]:
+    """Gestaffelt gewichteter Durchschnitt der Gegner-Tabellenplaetze (Nutzer-
+    Korrektur): `opponents` ist bereits nach Spieltag sortiert (naechster
+    zuerst), `weights` ordnet dem naechsten Gegner das groesste Gewicht zu und
+    faellt danach ab. Fehlt fuer weniger Gegner ein Teil der Liste (z.B.
+    Saisonende), werden einfach die vorderen (groessten) Gewichte der
+    verbleibenden Anzahl verwendet -- die Normierung ueber die Summe der
+    tatsaechlich genutzten Gewichte haelt die Reihenfolge (naechster zaehlt am
+    meisten) in jedem Fall korrekt."""
+    pairs = [(o["position"], w) for o, w in zip(opponents, weights) if o["position"] is not None]
+    if not pairs:
+        return None
+    total_weight = sum(w for _, w in pairs)
+    return sum(pos * w for pos, w in pairs) / total_weight
+
+
 def _remaining_schedule_difficulty(
-    fixtures: List[Fixture], table_by_team: Dict[str, TableEntry], team_id: Optional[str]
+    fixtures: List[Fixture],
+    table_by_team: Dict[str, TableEntry],
+    team_id: Optional[str],
+    weighted: bool = False,
 ) -> Tuple[List[dict], Optional[float]]:
     """Returns the next UPCOMING_FIXTURES_WINDOW opponents (with name/table
-    position/venue) for `team_id`, plus the average opponent table position
-    across them (None if there is no team_id or no upcoming fixtures)."""
+    position/venue) for `team_id`, plus a difficulty score across them (None
+    if there is no team_id or no upcoming fixtures). `weighted=True` (Nutzer-
+    Korrektur, fuer die eigene Restprogramm-Info-Spalte) uses the staggered
+    _weighted_position_average instead of the plain mean -- the ranking
+    category opponent_remaining_schedule_difficulty stays on the plain mean
+    (weighted=False, its established behaviour)."""
     if not team_id:
         return [], None
     opponents = []
@@ -244,7 +308,12 @@ def _remaining_schedule_difficulty(
             "position": opp_entry.position if opp_entry else None,
             "home": f.home_team_id == team_id,
         })
-    difficulty = mean(o["position"] for o in opponents if o["position"] is not None) if opponents else None
+    if not opponents:
+        return opponents, None
+    if weighted:
+        difficulty = _weighted_position_average(opponents)
+    else:
+        difficulty = mean(o["position"] for o in opponents if o["position"] is not None)
     return opponents, difficulty
 
 
@@ -253,7 +322,6 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
     venue = build_venue_map(dataset.fixtures)
     table_by_team: Dict[str, TableEntry] = dataset.table_by_team
     all_team_ids = list(table_by_team.keys())
-    rolling_form_ranks = build_team_rolling_form_ranks(team_points, all_team_ids)
     form_table_ranks = build_form_table_ranks(team_points, all_team_ids)
     home_venue_ranks, away_venue_ranks = build_team_venue_ranks(
         team_points, venue, all_team_ids,
@@ -304,14 +372,14 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         next_opponent_name = table_by_team[opponent_id].team_name if opponent_id in table_by_team else opponent_id
 
         upcoming_opponents, remaining_difficulty = _remaining_schedule_difficulty(
-            dataset.fixtures, table_by_team, own_team_id
+            dataset.fixtures, table_by_team, own_team_id, weighted=True
         )
         _, opponent_remaining_difficulty = _remaining_schedule_difficulty(
-            dataset.fixtures, table_by_team, opponent_id
+            dataset.fixtures, table_by_team, opponent_id, weighted=False
         )
 
-        own_momentum = team_momentum(rolling_form_ranks, own_team_id) if own_team_id else None
-        opp_momentum = team_momentum(rolling_form_ranks, opponent_id) if opponent_id else None
+        own_momentum = team_momentum(team_points, own_team_id) if own_team_id else None
+        opp_momentum = team_momentum(team_points, opponent_id) if opponent_id else None
 
         results[player.id] = PlayerMetrics(
             player=player,
