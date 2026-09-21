@@ -18,6 +18,7 @@ from kickbase_tool.bidding.pipeline import compute_bids
 from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
 from kickbase_tool.data.repository import (
+    fetch_all_rostered_player_ids,
     fetch_cash_balance,
     fetch_market_players,
     fetch_owned_player_ids,
@@ -53,11 +54,18 @@ def build_rows(argv=None) -> tuple:
     except KickbaseAPIError:
         cash_balance = None
 
-    # Wer ist gerade WIRKLICH kaufbar (siehe fetch_market_players): freie
-    # Spieler + von anderen Managern gelistete -- alles andere (fremder
-    # Kader, nicht gelistet) ist in Kickbase nicht erwerbbar und darf dem
-    # "Beste 11"-Pool im Artifact nicht als Kaufoption angeboten werden.
-    # Gleiches defensives Degradieren wie owned_ids/cash_balance oben.
+    # "Markt" (Nutzer-Korrektur): jeder Spieler, der NICHT bei einem anderen
+    # Liga-Mitglied im Kader steht, PLUS die von Kollegen explizit
+    # angebotenen -- nicht nur der kleine rotierende Ausschnitt aus
+    # fetch_market_players. rostered_ids = Kader ALLER Manager (eigener
+    # eingeschlossen); market_prices = Angebotspreise (freie Spieler + von
+    # Kollegen gelistete). Gleiches defensives Degradieren wie
+    # owned_ids/cash_balance oben -- bei Fehlschlag lieber ein leerer Pool
+    # als ein kaputter Kernexport.
+    try:
+        rostered_ids = fetch_all_rostered_player_ids(client, settings)
+    except KickbaseAPIError:
+        rostered_ids = None  # unbekannt -- siehe Fallback unten, NICHT als "niemand hat ihn" werten
     try:
         market_prices = fetch_market_players(client, settings)
     except KickbaseAPIError:
@@ -89,6 +97,30 @@ def build_rows(argv=None) -> tuple:
     rows = []
     for pid, pm in metrics_by_id.items():
         p = pm.player
+
+        # on_market/market_price (Nutzer-Korrektur): eigene Spieler brauchen
+        # beides nicht (siehe "owned" + Marktwert). Ein Spieler, der bei
+        # KEINEM Manager im Kader steht, ist ein freier Spieler -- sofort zum
+        # Marktwert kaufbar, auch wenn er gerade nicht im rotierenden
+        # Marktausschnitt (market_prices) auftaucht. Ein Spieler bei einem
+        # ANDEREN Manager ist nur kaufbar, wenn dieser ihn explizit gelistet
+        # hat (dann steht er in market_prices, zum dort gesetzten Preis).
+        if pid in owned_ids:
+            is_on_market = False
+            market_price = None
+        elif rostered_ids is None:
+            # Kader-Abfrage fehlgeschlagen: sicherer Fallback ist der enge,
+            # aber garantiert korrekte Marktausschnitt statt faelschlich
+            # ALLE Nicht-Eigenen als frei zu behandeln.
+            is_on_market = pid in market_prices
+            market_price = market_prices.get(pid)
+        elif pid not in rostered_ids:
+            is_on_market = True
+            market_price = market_prices.get(pid, pm.market_value)
+        else:
+            is_on_market = pid in market_prices
+            market_price = market_prices.get(pid)
+
         rows.append({
             "id": pid,
             "name": p.name,
@@ -100,8 +132,8 @@ def build_rows(argv=None) -> tuple:
             "status": p.status_text,
             "unavailable": p.is_unavailable,
             "owned": pid in owned_ids,
-            "on_market": pid in market_prices,
-            "market_price": market_prices.get(pid),
+            "on_market": is_on_market,
+            "market_price": market_price,
             "season_avg": pm.season_average,
             "recent_form_rank": recent_form_rank.get(pid),
             "recent_avg": pm.recent_form.average,

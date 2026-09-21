@@ -16,6 +16,13 @@ LEAGUE_SQUAD = "/v4/leagues/{league_id}/squad"
 LEAGUE_MARKET = "/v4/leagues/{league_id}/market"
 LEAGUE_ME = "/v4/leagues/{league_id}/me"
 LEAGUE_RANKING = "/v4/leagues/{league_id}/ranking"
+# Confirmed live 2026-09-21 (undocumented in the public community docs this
+# file otherwise references): full squad (all players, not just the current
+# lineup) of ONE OTHER manager in the league, keyed by their user id from
+# LEAGUE_RANKING's "us" list -- used to determine which players are rostered
+# by someone else at all (LEAGUE_SQUAD above only ever returns the
+# authenticated user's own squad).
+LEAGUE_MANAGER_SQUAD = "/v4/leagues/{league_id}/managers/{user_id}/squad"
 LEAGUE_PLAYER_PERFORMANCE = "/v4/leagues/{league_id}/players/{player_id}/performance"
 # Confirmed live 2026-09-14 (undocumented in the public community docs this
 # file otherwise references): the league-wide activity feed, which includes

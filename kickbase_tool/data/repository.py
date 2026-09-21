@@ -119,17 +119,18 @@ def fetch_cash_balance(client: KickbaseClient, settings: Settings) -> Optional[f
 
 
 def fetch_market_players(client: KickbaseClient, settings: Settings) -> Dict[str, float]:
-    """Aktuell auf dem Liga-Markt tatsaechlich kaufbare Spieler
-    (/v4/leagues/{leagueId}/market) -- confirmed live 2026-09-21: das sind NUR
-    freie Spieler ohne Besitzer (Feld "u" fehlt) plus die wenigen von anderen
-    Managern explizit zum Verkauf gelisteten (Feld "u" gesetzt). Alle anderen
-    Spieler (von einem anderen Manager gehalten, aber nicht gelistet) sind in
-    Kickbase schlicht NICHT kaufbar -- das ist die Grundlage fuer den
-    "Beste 11"-Spielerpool im Artifact (siehe besteElfPool im Frontend).
-    Liefert {player_id: aktueller_kaufpreis} direkt aus Feld "prc" (bei freien
-    Spielern == Marktwert, bei gelisteten der vom Manager gesetzte Preis) --
-    das ist der tatsaechliche Sofort-Kaufpreis, kein Schaetzwert. Requires
-    KICKBASE_LEAGUE_ID, genau wie fetch_owned_player_ids/fetch_cash_balance."""
+    """Vom Liga-Markt-Endpunkt (/v4/leagues/{leagueId}/market) explizit
+    ANGEBOTENE Spieler -- confirmed live 2026-09-21: dieser Endpunkt zeigt nur
+    einen rotierenden AUSSCHNITT freier Spieler (Feld "u" fehlt) plus die von
+    anderen Managern explizit zum Verkauf gelisteten (Feld "u" gesetzt), NICHT
+    alle freien Spieler der Liga (siehe Nutzer-Korrektur -- dafuer siehe
+    fetch_all_rostered_player_ids unten, das den kompletten Marktbegriff
+    abdeckt). Diese Funktion liefert trotzdem die einzige Quelle fuer den vom
+    JEWEILIGEN MANAGER frei gesetzten Verkaufspreis (Feld "prc") eines
+    fremden, aber angebotenen Spielers -- bei echten freien Spielern deckt
+    sich "prc" ohnehin mit dem regulaeren Marktwert. Liefert
+    {player_id: Preis}. Requires KICKBASE_LEAGUE_ID, genau wie
+    fetch_owned_player_ids/fetch_cash_balance."""
     if not settings.league_id:
         return {}
     raw = client.get(endpoints.LEAGUE_MARKET.format(league_id=settings.league_id))
@@ -141,6 +142,37 @@ def fetch_market_players(client: KickbaseClient, settings: Settings) -> Dict[str
         if pid is not None and price is not None:
             result[str(pid)] = float(price)
     return result
+
+
+def fetch_all_rostered_player_ids(client: KickbaseClient, settings: Settings) -> set:
+    """Alle Spieler-ids, die GERADE bei IRGENDEINEM Manager der Liga im Kader
+    stehen (eigener Kader eingeschlossen) -- Nutzer-Korrektur: "Markt" heisst
+    schlicht "nicht bei einem anderen Mitglied im Team", nicht nur die paar
+    Spieler aus fetch_market_players oben. Holt dafuer zuerst alle Manager-
+    ids aus /v4/leagues/{leagueId}/ranking (Feld "us"), dann je Manager den
+    KOMPLETTEN Kader (nicht nur die aktuelle Aufstellung!) ueber
+    /v4/leagues/{leagueId}/managers/{userId}/squad (confirmed live
+    2026-09-21, undokumentiert) -- LEAGUE_SQUAD liefert nur den eigenen
+    Kader, nicht den anderer Manager. Bei einer Liga mit z.B. 11 Managern
+    sind das 12 zusaetzliche Requests (1x ranking + 1x je Manager), pro
+    Sync-Lauf unkritisch. Requires KICKBASE_LEAGUE_ID."""
+    if not settings.league_id:
+        return set()
+    ranking = client.get(endpoints.LEAGUE_RANKING.format(league_id=settings.league_id))
+    users = as_list(ranking, "us", "users")
+    rostered: set = set()
+    for u in users:
+        user_id = pick(u, "i", "id")
+        if user_id is None:
+            continue
+        squad = client.get(
+            endpoints.LEAGUE_MANAGER_SQUAD.format(league_id=settings.league_id, user_id=user_id)
+        )
+        for item in extract_player_list(squad):
+            pid = pick(item, "pi", "i", "id")
+            if pid is not None:
+                rostered.add(str(pid))
+    return rostered
 
 
 def _normalize_fixtures(matchdays_raw) -> List[Fixture]:
