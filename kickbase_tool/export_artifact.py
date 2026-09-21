@@ -17,7 +17,12 @@ from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
 from kickbase_tool.bidding.pipeline import compute_bids
 from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
-from kickbase_tool.data.repository import fetch_cash_balance, fetch_owned_player_ids, load_dataset
+from kickbase_tool.data.repository import (
+    fetch_cash_balance,
+    fetch_market_players,
+    fetch_owned_player_ids,
+    load_dataset,
+)
 from kickbase_tool.images import fetch_player_thumbnail, fetch_team_logo
 from kickbase_tool.metrics.calculations import compute_all_metrics
 from kickbase_tool.ranking.scoring import compute_all_rankings
@@ -48,11 +53,38 @@ def build_rows(argv=None) -> tuple:
     except KickbaseAPIError:
         cash_balance = None
 
+    # Wer ist gerade WIRKLICH kaufbar (siehe fetch_market_players): freie
+    # Spieler + von anderen Managern gelistete -- alles andere (fremder
+    # Kader, nicht gelistet) ist in Kickbase nicht erwerbbar und darf dem
+    # "Beste 11"-Pool im Artifact nicht als Kaufoption angeboten werden.
+    # Gleiches defensives Degradieren wie owned_ids/cash_balance oben.
+    try:
+        market_prices = fetch_market_players(client, settings)
+    except KickbaseAPIError:
+        market_prices = {}
+
     team_names = {t.team_id: t.team_name for t in dataset.table}
 
     rank_position = {
         key: {pid: i + 1 for i, pid in enumerate(result.order)} for key, result in rankings.items()
     }
+
+    # Eigener Rang nur fuer den Punkteschnitt der letzten 5 Spiele (fuers
+    # "Beste 11"-Scoring im Artifact: Mix aus Kauf-Rang, Aufstellungs-Rang und
+    # diesem Rang -- siehe besteElfScoreOf) -- kein Eintrag in `rankings`
+    # oben, da diese Rangfolge nirgendwo sonst gebraucht wird. Fehlender
+    # Formwert (noch keine Einsaetze) landet ganz hinten, nicht neutral in
+    # der Mitte, da "keine Punkte" sportlich der schlechteste Fall ist.
+    recent_avg_order = sorted(
+        metrics_by_id.keys(),
+        key=lambda pid: (
+            metrics_by_id[pid].recent_form.average
+            if metrics_by_id[pid].recent_form.average is not None
+            else float("-inf")
+        ),
+        reverse=True,
+    )
+    recent_form_rank = {pid: i + 1 for i, pid in enumerate(recent_avg_order)}
 
     rows = []
     for pid, pm in metrics_by_id.items():
@@ -68,7 +100,10 @@ def build_rows(argv=None) -> tuple:
             "status": p.status_text,
             "unavailable": p.is_unavailable,
             "owned": pid in owned_ids,
+            "on_market": pid in market_prices,
+            "market_price": market_prices.get(pid),
             "season_avg": pm.season_average,
+            "recent_form_rank": recent_form_rank.get(pid),
             "recent_avg": pm.recent_form.average,
             "recent_min": pm.recent_form.minimum,
             "recent_max": pm.recent_form.maximum,

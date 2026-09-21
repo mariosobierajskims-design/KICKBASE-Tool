@@ -118,6 +118,31 @@ def fetch_cash_balance(client: KickbaseClient, settings: Settings) -> Optional[f
     return float(value) if value is not None else None
 
 
+def fetch_market_players(client: KickbaseClient, settings: Settings) -> Dict[str, float]:
+    """Aktuell auf dem Liga-Markt tatsaechlich kaufbare Spieler
+    (/v4/leagues/{leagueId}/market) -- confirmed live 2026-09-21: das sind NUR
+    freie Spieler ohne Besitzer (Feld "u" fehlt) plus die wenigen von anderen
+    Managern explizit zum Verkauf gelisteten (Feld "u" gesetzt). Alle anderen
+    Spieler (von einem anderen Manager gehalten, aber nicht gelistet) sind in
+    Kickbase schlicht NICHT kaufbar -- das ist die Grundlage fuer den
+    "Beste 11"-Spielerpool im Artifact (siehe besteElfPool im Frontend).
+    Liefert {player_id: aktueller_kaufpreis} direkt aus Feld "prc" (bei freien
+    Spielern == Marktwert, bei gelisteten der vom Manager gesetzte Preis) --
+    das ist der tatsaechliche Sofort-Kaufpreis, kein Schaetzwert. Requires
+    KICKBASE_LEAGUE_ID, genau wie fetch_owned_player_ids/fetch_cash_balance."""
+    if not settings.league_id:
+        return {}
+    raw = client.get(endpoints.LEAGUE_MARKET.format(league_id=settings.league_id))
+    items = pick(raw, "it", "items") or []
+    result = {}
+    for item in items:
+        pid = pick(item, "i", "id", "pi")
+        price = pick(item, "prc", "price")
+        if pid is not None and price is not None:
+            result[str(pid)] = float(price)
+    return result
+
+
 def _normalize_fixtures(matchdays_raw) -> List[Fixture]:
     """The /matchdays endpoint groups matches per matchday
     (`{day, it: [...matches]}`), confirmed live; a flat list of matches that
