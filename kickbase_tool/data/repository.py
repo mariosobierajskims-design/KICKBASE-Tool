@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from kickbase_tool.api import endpoints
 from kickbase_tool.api.cache import JsonFileCache
@@ -104,6 +104,18 @@ def fetch_owned_player_ids(client: KickbaseClient, settings: Settings) -> set:
         return set()
     raw = client.get(endpoints.LEAGUE_SQUAD.format(league_id=settings.league_id))
     return {str(pick(p, "i", "id", "pi")) for p in extract_player_list(raw) if pick(p, "i", "id", "pi") is not None}
+
+
+def fetch_cash_balance(client: KickbaseClient, settings: Settings) -> Optional[float]:
+    """Aktueller Kontostand (Kickbase-Feld "b" -- confirmed live 2026-09-21
+    gegen /v4/leagues/{leagueId}/me) -- kann negativ sein (Kickbase erlaubt
+    einen Kassenkredit ueber zukuenftige Einnahmen). Requires KICKBASE_LEAGUE_ID,
+    genau wie fetch_owned_player_ids oben."""
+    if not settings.league_id:
+        return None
+    raw = client.get(endpoints.LEAGUE_ME.format(league_id=settings.league_id))
+    value = pick(raw, "b", "budget", "cash")
+    return float(value) if value is not None else None
 
 
 def _normalize_fixtures(matchdays_raw) -> List[Fixture]:

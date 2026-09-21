@@ -17,13 +17,13 @@ from kickbase_tool.api.client import KickbaseAPIError, KickbaseClient
 from kickbase_tool.bidding.pipeline import compute_bids
 from kickbase_tool.config import authenticate, load_settings
 from kickbase_tool.data.models import POSITION_LABELS
-from kickbase_tool.data.repository import fetch_owned_player_ids, load_dataset
+from kickbase_tool.data.repository import fetch_cash_balance, fetch_owned_player_ids, load_dataset
 from kickbase_tool.images import fetch_player_thumbnail, fetch_team_logo
 from kickbase_tool.metrics.calculations import compute_all_metrics
 from kickbase_tool.ranking.scoring import compute_all_rankings
 
 
-def build_rows(argv=None) -> list:
+def build_rows(argv=None) -> tuple:
     settings = load_settings()
     client = KickbaseClient(request_delay_seconds=settings.request_delay_seconds)
     authenticate(client, settings)
@@ -36,6 +36,17 @@ def build_rows(argv=None) -> list:
         owned_ids = fetch_owned_player_ids(client, settings)
     except KickbaseAPIError:
         owned_ids = set()
+
+    # Kontostand fuers "Beste 11"-Budget im Artifact (siehe Aufgabenstellung
+    # "BUDGET: Gesamtbudget = aktueller Kontostand + Marktwert aller meiner
+    # eigenen Spieler") -- wie owned_ids oben defensiv: jeder Fehler (fehlende
+    # KICKBASE_LEAGUE_ID, Netzwerkfehler) degradiert zu None statt den
+    # Kernexport zu gefaehrden; das Frontend zeigt dann "Budget nicht
+    # verfuegbar" statt zu rechnen.
+    try:
+        cash_balance = fetch_cash_balance(client, settings)
+    except KickbaseAPIError:
+        cash_balance = None
 
     team_names = {t.team_id: t.team_name for t in dataset.table}
 
@@ -100,7 +111,7 @@ def build_rows(argv=None) -> list:
     for row in rows:
         row["bid"] = bids_by_pid.get(row["id"])
 
-    return rows
+    return rows, cash_balance
 
 
 def main(argv=None) -> int:
@@ -108,7 +119,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=str, default="artifact_data/players.json")
     args = parser.parse_args(argv)
 
-    rows = build_rows()
+    rows, cash_balance = build_rows()
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,6 +130,7 @@ def main(argv=None) -> int:
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "player_count": len(rows),
         "owned_count": sum(1 for r in rows if r["owned"]),
+        "cash_balance": cash_balance,
     }
     meta_path = out_path.with_name("meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
