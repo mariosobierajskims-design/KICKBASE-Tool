@@ -59,7 +59,11 @@ BASE_CATEGORIES = [
     "goals_assists_cleansheets",
     "opponent_remaining_schedule_difficulty", "opponent_momentum",
 ]
-AUFSTELLUNG_CATEGORIES = BASE_CATEGORIES + ["market_value"]
+# Nutzer-Korrektur (Vereinfachung): market_value fliesst NICHT mehr in den
+# Aufstellungsrang ein -- der soll rein sportlich beantworten "wie stark ist
+# dieser Spieler fuer die naechsten Spiele", unabhaengig vom Preis. Der Preis
+# zaehlt nur noch im Kauf-Rang (ueber points_per_value).
+AUFSTELLUNG_CATEGORIES = BASE_CATEGORIES
 KAUF_CATEGORIES = BASE_CATEGORIES + ["points_per_value"]
 VERKAUF_CATEGORIES = KAUF_CATEGORIES
 

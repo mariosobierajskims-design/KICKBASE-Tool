@@ -48,22 +48,22 @@ def test_best_season_average_gets_rank_one_in_that_category():
     assert result.order[0] == "a"
 
 
-def test_higher_market_value_ranks_better_for_aufstellung():
-    # Direction flipped on explicit user request: a higher market value is a
-    # quality signal for Aufstellung, not a cost to minimize. Aufstellung is
-    # also the only ranking that uses market_value at all (Kauf/Verkauf use
-    # points_per_value instead).
+def test_aufstellung_ignores_market_value_and_price():
+    # Vereinfachung ("Spielerkartei entschlacken"): der Aufstellungsrang soll
+    # rein sportlich sein und darf sich NICHT mehr am Marktwert orientieren --
+    # zwei sportlich identische Spieler landen trotz unterschiedlichem
+    # Marktwert auf demselben Rang.
     metrics = {
         "a": make_player_metrics("a", season_avg=10, market_value=5_000_000),
         "b": make_player_metrics("b", season_avg=10, market_value=1_000_000),
     }
     result = compute_ranking(metrics, AUFSTELLUNG_CATEGORIES, weights={c: 1.0 for c in AUFSTELLUNG_CATEGORIES})
-    assert result.category_ranks["market_value"]["a"] == 1
-    assert result.category_ranks["market_value"]["b"] == 2
+    assert result.scores["a"] == result.scores["b"]
 
 
-def test_market_value_is_not_a_kauf_or_verkauf_category():
+def test_market_value_is_not_a_ranking_category_anywhere():
     assert "market_value" not in KAUF_CATEGORIES
+    assert "market_value" not in AUFSTELLUNG_CATEGORIES
     assert "points_per_value" in KAUF_CATEGORIES
     assert "points_per_value" not in AUFSTELLUNG_CATEGORIES
 

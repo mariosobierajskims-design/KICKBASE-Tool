@@ -16,7 +16,10 @@
 #   recent_min                          (3)  Minimum letzte 5 Spiele
 #   recent_max                          (4)  Maximum letzte 5 Spiele
 #   recent_min_max_avg                  (5)  Durchschnitt aus Min/Max
-#   market_value                        (6)  Aktueller Marktwert (nur Aufstellung -- hoeher = besser)
+#   market_value                        (6)  Aktueller Marktwert -- seit der Entschlackung in KEINEM
+#                                             der drei Rankings mehr Teil der Gewichtung (Aufstellung
+#                                             soll rein sportlich sein; Kauf/Verkauf nutzen stattdessen
+#                                             points_per_value). Bleibt nur als Rohwert/Spalte erhalten.
 #   points_per_value                    (7)  Punkte pro Marktwert (nur Kauf/Verkauf)
 #   team_form                           (8)  Team-Form (letzte 5 Spiele)
 #   opponent_form                       (9)  Gegner-Form (naechster Spieltag)
@@ -54,11 +57,19 @@
 # EIGENE Team weiterhin nur eine Info-Spalte, fliesst aber fuer den GEGNER als
 # eigene Kategorie (opponent_remaining_schedule_difficulty) mit ein.
 
+# Nutzer-Korrektur 2026-09-22 (Vereinfachung "Spielerkartei entschlacken"):
+# - recent_min/recent_max waren ueberall mit 1.0 gewichtet, dem hoechsten Wert
+#   der gesamten Tabelle -- ein einzelnes Extremspiel durfte dadurch das ganze
+#   Ranking dominieren. Jetzt nur noch eine sehr geringe Stabilitaets-Info.
+# - market_value fliegt komplett aus dem Aufstellungsrang (siehe scoring.py).
+# - verkauf nutzt jetzt dieselbe (entschlackte) Gewichtung wie kauf statt
+#   eigener extremer Sonder-Gewichte -- der Verkaufsrang ist nur noch eine
+#   Hintergrund-Berechnung, keine eigene Detail-Optimierung mehr wert.
 aufstellung:
   season_avg: 0.2
   recent_avg: 0.095
-  recent_min: 1.0
-  recent_max: 1.0
+  recent_min: 0.05
+  recent_max: 0.05
   recent_min_max_avg: 0.045
   team_form: 0.095
   opponent_form: 0.045
@@ -69,13 +80,12 @@ aufstellung:
   goals_assists_cleansheets: 0.2
   opponent_remaining_schedule_difficulty: 0.045
   opponent_momentum: 0.045
-  market_value: 0.2
 
 kauf:
   season_avg: 0.2
   recent_avg: 0.2
-  recent_min: 1.0
-  recent_max: 1.0
+  recent_min: 0.05
+  recent_max: 0.05
   recent_min_max_avg: 1.0
   points_per_value: 0.15
   team_form: 0.1
@@ -89,18 +99,18 @@ kauf:
   opponent_momentum: 0.05
 
 verkauf:
-  season_avg: 0.35
-  recent_avg: 0.175
-  recent_min: 1.0
-  recent_max: 1.0
+  season_avg: 0.2
+  recent_avg: 0.2
+  recent_min: 0.05
+  recent_max: 0.05
   recent_min_max_avg: 1.0
-  points_per_value: 0.175
+  points_per_value: 0.15
   team_form: 0.1
-  opponent_form: 1.0
+  opponent_form: 0.05
   table_position_diff: 1.0
-  own_venue_rank: 0.5
-  opponent_venue_rank: 0.5
-  venue_rank_diff: 1.0
-  goals_assists_cleansheets: 0.1
-  opponent_remaining_schedule_difficulty: 1.0
-  opponent_momentum: 1.0
+  own_venue_rank: 0.025
+  opponent_venue_rank: 0.025
+  venue_rank_diff: 0.05
+  goals_assists_cleansheets: 0.15
+  opponent_remaining_schedule_difficulty: 0.05
+  opponent_momentum: 0.05
