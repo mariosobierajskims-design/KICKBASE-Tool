@@ -230,6 +230,32 @@ def test_market_factor_shift_moves_overpay_up_or_down():
     assert aggressive["overpay_pct"] > neutral["overpay_pct"]
 
 
+def test_marktwert_trend_bonus_is_asymmetric_bigger_up_than_down():
+    # Guenstige (<10 Mio.) Spieler mit stark steigendem Marktwert wurden vom
+    # Cold-Start-Band strukturell unterboten (siehe fresh-only Backtest-
+    # Auswertung, Sept. 2026: Median Overpay ~6.6% statt bisher max. ~5%
+    # erreichbar) -- der Trend-Bonus fuer "marktwert" ist deshalb bewusst
+    # ASYMMETRISCH: staerker nach oben (steigender Trend) als nach unten
+    # (fallender Trend blieb bei den alten +-3 Punkten, weil dort die
+    # Realdaten schon passten). Feste score/components, um den score<->trend-
+    # Kopplungseffekt von attractiveness() hier auszuklammern.
+    base_attr = {"category": CATEGORY_MARKTWERT, "score": 0.35, "components": {}, "reasons": []}
+    neutral = {**base_attr, "components": {"market_value_trend": 0.5}}
+    rising = {**base_attr, "components": {"market_value_trend": 1.0}}
+    falling = {**base_attr, "components": {"market_value_trend": 0.0}}
+
+    row = {"market_value": 4_000_000}
+    neutral_pct = recommend_bid(row, neutral, None, None, NEUTRAL_MARKET_FACTOR, CONFIG)["overpay_pct"]
+    rising_pct = recommend_bid(row, rising, None, None, NEUTRAL_MARKET_FACTOR, CONFIG)["overpay_pct"]
+    falling_pct = recommend_bid(row, falling, None, None, NEUTRAL_MARKET_FACTOR, CONFIG)["overpay_pct"]
+
+    up_shift = rising_pct - neutral_pct
+    down_shift = neutral_pct - falling_pct
+    assert up_shift > 0
+    assert down_shift > 0
+    assert up_shift > down_shift
+
+
 def test_bid_range_stays_ordered_when_final_pct_is_negative():
     # Regressionstest fuer den gefundenen Vorzeichenfehler: bei einem Spieler,
     # dessen empfohlenes Gebot UNTER Marktwert liegt (final_pct < 0), muss

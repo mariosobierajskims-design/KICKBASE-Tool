@@ -183,8 +183,30 @@ market_factor_max_shift_pct: 4.0
 
 # Wie stark ein stark beschleunigender MW-Trend den Overpay INNERHALB der
 # Kategorie nach oben ziehen darf (Prozentpunkte, gedeckelt) -- soll
-# aggressiver machen, aber nicht den sportlichen Wert dominieren.
+# aggressiver machen, aber nicht den sportlichen Wert dominieren. Fallback
+# fuer Kategorien ohne eigenen Eintrag unten in
+# trend_bonus_max_shift_pct_by_category.
 trend_bonus_max_shift_pct: 3.0
+
+# Kategorie-spezifische, ASYMMETRISCHE Ueberschreibung des obigen Werts
+# (Backtest + fresh-only Ligadaten, Sept. 2026): guenstige (<10 Mio.) Spieler
+# in den beiden untersten Kategorien mit klar steigendem Marktwert wurden
+# trotz ausgeschoepftem Cold-Start-Band + altem symmetrischen Trend-Bonus
+# (max. 3 Punkte) strukturell unterboten -- real beobachteter Overpay bei
+# stark steigendem Trend lag deutlich hoeher als altes Bandende + 3 Punkte
+# erlaubten (marktwert/rising: Median 6.6%/Ø 9.5% bei n=8 unverfaelschten
+# Vergleichstransfers; ueber_marktwert/rising: Median 8.0%/Ø 10.5% bei n=8).
+# Fuer fallenden Trend passte der ALTE, symmetrische Wert dagegen schon
+# einigermassen (fresh-only Median dort nahe 0%) -- ein rein symmetrisch
+# erhoehter Bonus haette zusaetzlich fallende/flache guenstige Spieler
+# faelschlich noch staerker abgewertet (getestet: verschlechtert
+# Trefferquote in beiden Kategorien trotz korrekter Rising-Anpassung).
+# Deshalb "up" (steigender Trend) angehoben, "down" (fallender Trend)
+# unveraendert bei 3.0 belassen. will_haben/all_in unveraendert, dort
+# passten Band und Realdaten (auch bei teureren Spielern) schon zusammen.
+trend_bonus_max_shift_pct_by_category:
+  marktwert: { up: 6.0, down: 3.0 }
+  ueber_marktwert: { up: 5.0, down: 3.0 }
 
 # Marktwertklassen (Grenzen, obere Grenze exklusiv) fuer Kalibrierung und
 # Aehnlichkeitssuche.

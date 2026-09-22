@@ -135,7 +135,14 @@ def recommend_bid(
     final_pct += market_factor.get("shift_pct", 0.0)
 
     trend_component = attractiveness_result["components"].get("market_value_trend", 0.5)
-    trend_bonus = (trend_component - 0.5) / 0.5 * config.get("trend_bonus_max_shift_pct", 0.0)
+    symmetric_max = config.get("trend_bonus_max_shift_pct", 0.0)
+    per_category = config.get("trend_bonus_max_shift_pct_by_category", {}).get(category)
+    if isinstance(per_category, dict):
+        up_max, down_max = per_category.get("up", symmetric_max), per_category.get("down", symmetric_max)
+    else:
+        up_max = down_max = per_category if per_category is not None else symmetric_max
+    trend_bonus_max = up_max if trend_component >= 0.5 else down_max
+    trend_bonus = (trend_component - 0.5) / 0.5 * trend_bonus_max
     final_pct += trend_bonus
 
     no_bid = (
