@@ -149,9 +149,17 @@ DEFAULTS: Dict[str, Any] = {
     # linearen Cold-Start-Blend (siehe pricing.py). Startwerte aus der
     # Aufgabenstellung (⚪~50., 🟢~60-65., ⭐~75-80., 🔥~85-90., hier als
     # Punktwerte), zur Kalibrierung anhand echter Ligadaten siehe backtest.py.
+    # marktwert/ueber_marktwert am 25.9. angehoben (siehe backtest.py-Auswertung
+    # nach 6-10 Mio.-Preisklasse): beim urspruenglichen 50./62.-Perzentil lag die
+    # Trefferquote fuer 6-10 Mio.-Spieler dieser beiden Kategorien nur bei
+    # 20-31% mit im Schnitt -6.6% bis -7.8% zu niedrigem Gebot -- der Median
+    # (50. Perzentil per Definition) reicht dort nicht, weil die tatsaechlichen
+    # Gewinnerpreise in der oberen Haelfte der Vergleichsverteilung liegen.
+    # will_haben/all_in unveraendert, dort passte die Trefferquote bereits
+    # (82-94%).
     "category_target_percentile": {
-        "marktwert": 50,
-        "ueber_marktwert": 62,
+        "marktwert": 65,
+        "ueber_marktwert": 68,
         "will_haben": 77,
         "all_in": 87,
     },
@@ -187,9 +195,15 @@ DEFAULTS: Dict[str, Any] = {
     # (steigender Trend) angehoben, "down" (fallender Trend) unveraendert bei
     # 3.0 belassen. will_haben/all_in unveraendert, dort passten Band und
     # Realdaten (auch bei teureren Spielern) schon zusammen.
+    # "up" am 25.9. nochmal deutlich angehoben (6.0/5.0 -> 15.0/12.0): reichte
+    # trotz der ersten Anhebung nicht aus, um die 6-10 Mio.-Trefferquote in
+    # marktwert/ueber_marktwert zu retten (siehe category_target_percentile-
+    # Kommentar oben fuer die Zahlen) -- Backtest-Sweep ueber mehrere Werte
+    # zeigt hier ein Plateau: darueber hinaus wird v.a. bei 3-6 Mio. deutlich
+    # ueberzahlt, ohne die 6-10 Mio.-Klasse nennenswert weiter zu verbessern.
     "trend_bonus_max_shift_pct_by_category": {
-        "marktwert": {"up": 6.0, "down": 3.0},
-        "ueber_marktwert": {"up": 5.0, "down": 3.0},
+        "marktwert": {"up": 15.0, "down": 3.0},
+        "ueber_marktwert": {"up": 12.0, "down": 3.0},
     },
     # Marktwertklassen fuer calibration.py/similarity.py (Grenzen exklusiv oben).
     "market_value_classes": [3_000_000, 6_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000, 30_000_000],
