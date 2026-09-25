@@ -23,6 +23,20 @@ attractiveness:
   ppm_efficiency_weight: 0.20
   market_value_trend_weight: 0.15
 
+# "Kurzeinsatz-Joker"-Sonderfall (Nutzer-Beispiel Ruoppi, 25.9.): ein Spieler
+# mit vielen kurzen Einwechsel-Auftritten (wenig Einsatzminuten insgesamt),
+# der darin aber sehr punkteeffizient ist, wird vom rang-/startchance-lastigen
+# Score strukturell unterschaetzt -- Kickbases eigene Startchance-Prognose
+# reagiert erst nachtraeglich auf so einen Formanstieg. Bewusst ein
+# BEGRENZTER, EIN-Kategorie-Bonus (⚪ MARKTWERT -> 🟢 ÜBER MARKTWERT), keine
+# eigene 5. Gewichtungssaeule (das wuerde alle kalibrierten Kategorie-
+# Schwellen mitverschieben, siehe scoring.py::detect_efficient_substitute).
+efficient_substitute:
+  min_appearances: 2
+  max_avg_minutes_per_appearance: 30.0
+  minutes_floor: 90.0
+  min_points_per_minute: 0.55
+
 # Rang-Baender, explizite Nutzervorgabe (feiner gestuft als zuvor, vor allem
 # im Mittelfeld 141-250). "max_rank: null" = offenes Ende (schlechtester Tier).
 rank_tiers:

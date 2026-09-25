@@ -176,6 +176,34 @@ def has_small_sample(row: dict) -> bool:
     return not row.get("season_avg")
 
 
+# "Kurzeinsatz-Joker"-Sonderfall (Nutzer-Beispiel: Otto Ruoppi -- fast jeden
+# Spieltag ein kurzer Einwechsel-Auftritt von wenigen Minuten, dabei aber sehr
+# punkteeffizient). Die regulaere Gewichtung ist bewusst rang-/startchance-
+# lastig (35%/30%, siehe Modul-Docstring) und Kickbases eigene Startchance-
+# Prognose reagiert erst NACHTRAEGLICH auf so einen Formanstieg -- ein reiner
+# Kurzeinsatz-Spieler wird dadurch strukturell unterschaetzt. Bewusst als
+# BEGRENZTER, EIN-Kategorie-Sonderfall umgesetzt (dieselbe Grundidee wie die
+# small_sample-Rang-Relativierung oben), NICHT als eigene 5.
+# Gewichtungssaeule -- eine echte neue Gewichtungsdimension wuerde alle fein
+# kalibrierten Kategorie-Schwellen mitverschieben (siehe Ruoppi-Diskussion,
+# bewusst gegen diese Option entschieden). `minutes_floor` verhindert, dass
+# ein einzelner sehr kurzer Auftritt mit Zufallstor eine absurd hohe
+# Punkte-pro-Minute-Quote erzeugt (Kleinstichproben-Schutz, dieselbe
+# Grundidee wie robust_weighted_stats' Ausreisser-Filter in stats.py).
+def detect_efficient_substitute(row: dict, config: dict) -> bool:
+    cfg = config.get("efficient_substitute") or {}
+    appearances = row.get("season_appearances") or 0
+    minutes = row.get("season_minutes_total")
+    points = row.get("season_points_total")
+    if appearances < cfg.get("min_appearances", 2) or not minutes or points is None:
+        return False
+    avg_minutes_per_appearance = minutes / appearances
+    if avg_minutes_per_appearance > cfg.get("max_avg_minutes_per_appearance", 30.0):
+        return False  # kein Kurzeinsatz-Profil, normale Einsatzzeit
+    points_per_minute_shrunk = points / max(minutes, cfg.get("minutes_floor", 90.0))
+    return points_per_minute_shrunk >= cfg.get("min_points_per_minute", 0.55)
+
+
 def attractiveness(row: dict, snapshot_history: Optional[List[dict]], trend: dict, config: dict) -> dict:
     sp_score = start_probability_score(row.get("start_probability"), config)
 
@@ -220,7 +248,21 @@ def attractiveness(row: dict, snapshot_history: Optional[List[dict]], trend: dic
     if cap and CATEGORY_ORDER.index(category) < CATEGORY_ORDER.index(cap):
         category = cap
 
+    # "Kurzeinsatz-Joker"-Sonderfall (siehe detect_efficient_substitute oben):
+    # hebt NUR aus der voelligen Ablehnung (⚪ MARKTWERT) einmalig in ⚪->🟢
+    # (ÜBER MARKTWERT) heraus, niemals bis WILL-ICH-HABEN/ALL-IN -- dieselbe
+    # Grenze wie die start_probability_category_cap-Deckelung oben gilt
+    # danach unveraendert weiter (bei schlechter Startchance ist die
+    # Deckelung ohnehin bereits genau diese Kategorie).
+    efficient_substitute = detect_efficient_substitute(row, config)
+    if efficient_substitute and category == CATEGORY_MARKTWERT:
+        category = CATEGORY_UEBER_MARKTWERT
+        if cap and CATEGORY_ORDER.index(category) < CATEGORY_ORDER.index(cap):
+            category = cap
+
     special_cases = detect_special_cases(row, snapshot_history)
+    if efficient_substitute:
+        special_cases = special_cases + ["effizienter Kurzeinsatz-Joker (viele kurze Einsaetze, sehr hohe Punkte/Minute)"]
     reasons = _build_reasons(sp_score, rank_score, ppm_sc, trend_sc, row, special_cases)
 
     return {

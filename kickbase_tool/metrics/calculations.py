@@ -99,6 +99,20 @@ class PlayerMetrics:
     start_probability: Optional[int] = None
     market_value_change_day: Optional[float] = None
 
+    # Rohdaten fuer den "effizienter Kurzeinsatz"-Sonderfall im Gebotsmodell
+    # (kickbase_tool/bidding/scoring.py::detect_special_cases): echte
+    # Einsatzminuten liegen pro Spieltag bereits vor (data/models.py::
+    # MatchdayEntry.minutes, aus dem Kickbase-Feld "mp"), wurden bisher aber
+    # nirgends aggregiert. season_appearances zaehlt nur Spieltage mit > 0
+    # Minuten (ein 0-Minuten-Tag mit Punkte-Eintrag zaehlt nicht als
+    # Einsatz), season_points_total ist die Summe genau dieser Punkte (fuer
+    # eine minutenbezogene Effizienz, NICHT dieselbe Kennzahl wie
+    # points_per_market_value). Defaults halten bestehende Konstruktor-Aufrufe
+    # (siehe Kommentar oben zu start_probability) funktionsfaehig.
+    season_minutes_total: Optional[int] = None
+    season_appearances: int = 0
+    season_points_total: Optional[float] = None
+
 
 TeamPointsByMatchday = Dict[Tuple[str, int], float]
 VenueMap = Dict[Tuple[str, int], bool]  # (team_id, matchday) -> is_home
@@ -336,6 +350,18 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         season_points = [e.points for e in player.matchdays if e.played and e.points is not None]
         season_average = player.season_average_points if player.season_average_points is not None else mean(season_points)
 
+        # Einsatzminuten-Aggregation (siehe PlayerMetrics-Docstring oben) --
+        # nur Spieltage mit tatsaechlich > 0 Minuten zaehlen als Einsatz,
+        # season_minutes_total bleibt None statt 0, wenn ueberhaupt keine
+        # Minutenangabe vorliegt (unterscheidet "keine Daten" von "0 Minuten
+        # gespielt").
+        minute_entries = [
+            (e.points, e.minutes) for e in player.matchdays if e.played and e.minutes is not None
+        ]
+        season_minutes_total = sum(m for _, m in minute_entries) if minute_entries else None
+        season_appearances = sum(1 for _, m in minute_entries if m and m > 0)
+        season_points_total = sum(p for p, m in minute_entries if m and m > 0) if minute_entries else None
+
         points_per_value = None
         if season_average is not None and player.market_value:
             points_per_value = season_average / player.market_value
@@ -406,5 +432,8 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             opponent_momentum=opp_momentum,
             start_probability=player.start_probability,
             market_value_change_day=player.market_value_change_day,
+            season_minutes_total=season_minutes_total,
+            season_appearances=season_appearances,
+            season_points_total=season_points_total,
         )
     return results

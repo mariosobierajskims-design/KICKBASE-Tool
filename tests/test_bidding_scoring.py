@@ -4,6 +4,7 @@ from kickbase_tool.bidding.scoring import (
     CATEGORY_UEBER_MARKTWERT,
     CATEGORY_WILL_HABEN,
     attractiveness,
+    detect_efficient_substitute,
     ppm_thresholds_for,
     rank_tier_score,
     start_probability_score,
@@ -134,3 +135,51 @@ def test_small_sample_relativizes_bad_rank():
     without_sample = attractiveness({**base_row, "season_avg": None}, None, {}, CONFIG)
     assert without_sample["components"]["rank_tier"] > with_sample["components"]["rank_tier"]
     assert any("Stichprobe" in flag for flag in without_sample["special_cases"])
+
+
+def test_efficient_substitute_flag_matches_ruoppi_style_profile():
+    # Otto Ruoppi (Nutzer-Beispiel, 25.9.): 3 kurze Einwechsel-Auftritte
+    # (27'/5'/9' = 41 Minuten gesamt), dabei 15/23/47 = 85 Punkte -- viele
+    # Kurzeinsaetze, sehr hohe Effizienz pro Minute.
+    ruoppi_style = {"season_appearances": 3, "season_minutes_total": 41, "season_points_total": 85}
+    assert detect_efficient_substitute(ruoppi_style, CONFIG) is True
+
+
+def test_efficient_substitute_flag_false_for_normal_starter():
+    # Volle Spielzeit (90'/Spiel) -- kein Kurzeinsatz-Profil, unabhaengig von
+    # der Effizienz.
+    starter = {"season_appearances": 5, "season_minutes_total": 450, "season_points_total": 400}
+    assert detect_efficient_substitute(starter, CONFIG) is False
+
+
+def test_efficient_substitute_flag_false_for_single_lucky_cameo():
+    # Nur 1 Einsatz -- ein einzelner Zufallstreffer soll den Sonderfall nicht
+    # ausloesen koennen (min_appearances-Schutz).
+    one_off = {"season_appearances": 1, "season_minutes_total": 5, "season_points_total": 40}
+    assert detect_efficient_substitute(one_off, CONFIG) is False
+
+
+def test_efficient_substitute_flag_false_for_low_efficiency_substitute():
+    # Kurzeinsatz-Profil, aber unterdurchschnittliche Effizienz -- kein Bonus.
+    weak_sub = {"season_appearances": 4, "season_minutes_total": 60, "season_points_total": 20}
+    assert detect_efficient_substitute(weak_sub, CONFIG) is False
+
+
+def test_ruoppi_style_player_elevated_from_marktwert_to_ueber_marktwert():
+    # Schlechter Rang + Ausgeschlossene Startchance wuerden allein bei
+    # ⚪ MARKTWERT landen (siehe test_bad_rank_and_ausgeschlossen_...
+    # oben) -- der Kurzeinsatz-Joker-Sonderfall hebt genau diesen Fall auf
+    # 🟢 ÜBER MARKTWERT, aber nicht weiter (start_probability_category_cap
+    # deckelt bei Startchance 5 ohnehin auf ÜBER MARKTWERT).
+    row = {
+        "market_value": 4_193_090, "market_value_change_day": 2_517_086,
+        "kauf_rank": 263, "start_probability": 5, "points_per_value": 6.68 / 1_000_000,
+        "season_avg": 28.0, "status": "fit",
+        "season_appearances": 3, "season_minutes_total": 41, "season_points_total": 85,
+    }
+    without_minutes = attractiveness({**row, "season_appearances": 0, "season_minutes_total": None, "season_points_total": None}, None, {}, CONFIG)
+    assert without_minutes["category"] == CATEGORY_MARKTWERT
+
+    with_minutes = attractiveness(row, None, {}, CONFIG)
+    assert with_minutes["category"] == CATEGORY_UEBER_MARKTWERT
+    assert any("Kurzeinsatz-Joker" in flag for flag in with_minutes["special_cases"])

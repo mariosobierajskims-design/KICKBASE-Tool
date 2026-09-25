@@ -29,6 +29,15 @@ DEFAULTS: Dict[str, Any] = {
         "ppm_efficiency_weight": 0.20,
         "market_value_trend_weight": 0.15,
     },
+    # "Kurzeinsatz-Joker"-Sonderfall (Nutzer-Beispiel Ruoppi, 25.9.): begrenzter
+    # EIN-Kategorie-Bonus (⚪->🟢) statt einer 5. Gewichtungssaeule, siehe
+    # scoring.py::detect_efficient_substitute fuer die volle Begruendung.
+    "efficient_substitute": {
+        "min_appearances": 2,  # mind. 2 Einsaetze, kein Ein-Spiel-Zufallstreffer
+        "max_avg_minutes_per_appearance": 30.0,  # nur echte Kurzeinsaetze, kein normaler Rotationsspieler
+        "minutes_floor": 90.0,  # Shrinkage-Nenner gegen Kleinstichproben-Explosivitaet
+        "min_points_per_minute": 0.55,  # Schwelle fuer "sehr effizient" auf den geshrinkten Wert
+    },
     # Rang-Baender, explizite Nutzervorgabe (feiner gestuft als zuvor, vor
     # allem im Mittelfeld 141-250).
     "rank_tiers": [
