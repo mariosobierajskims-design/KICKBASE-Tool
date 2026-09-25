@@ -1,5 +1,6 @@
 from kickbase_tool.bidding.config import load_bidding_config
 from kickbase_tool.bidding.scoring import (
+    CATEGORY_ALL_IN,
     CATEGORY_MARKTWERT,
     CATEGORY_UEBER_MARKTWERT,
     CATEGORY_WILL_HABEN,
@@ -92,13 +93,15 @@ def test_start_probability_cap_still_engages_when_score_would_otherwise_be_highe
     assert result["category"] == CATEGORY_UEBER_MARKTWERT
 
 
-def test_schlotterbeck_reaches_will_haben_despite_low_ppm_efficiency():
-    # Starker Rang (35%) und sichere Startchance (30%) allein reichen mit den
-    # aktuellen Gewichten nicht ganz bis ALL_IN, wenn die PKT/MIO-Effizienz
-    # (20%) deutlich unterdurchschnittlich ist und kein MW-Trend (15%,
-    # neutral bei 0.5) gegensteuert -- WILL_HABEN statt ALL_IN, aber
-    # weiterhin klar nicht in einer niedrigeren Kategorie (absolute
-    # sportliche Qualitaet zaehlt trotzdem noch spuerbar).
+def test_schlotterbeck_reaches_all_in_with_rank_and_start_dominant():
+    # Nutzer-Korrektur (25.9.): Kauf-Rang (40%) + Startchance (35%) sollen mit
+    # zusammen 75% klar dominieren. Ein Top-Rang (Tier-Score 1.0) + sichere
+    # Startchance (Score 1.0) allein ergibt bereits 0.40+0.35=0.75 -- das
+    # liegt so nah an der ALL_IN-Schwelle (0.80), dass selbst eine deutlich
+    # unterdurchschnittliche PKT/MIO-Effizienz (15%) den Rest genuegend
+    # beitraegt, um ALL_IN zu erreichen (0.75 + 0.15*ppm_sc + 0.10*0.5 > 0.80
+    # fuer jedes ppm_sc > 0). Das ist die beabsichtigte Folge der neuen
+    # Gewichtung, nicht mehr WILL_HABEN wie bei der alten 35/30/20/15-Gewichtung.
     row = {
         "market_value": 35_000_000, "market_value_change_day": 0,
         "kauf_rank": 15, "start_probability": 1,
@@ -106,7 +109,7 @@ def test_schlotterbeck_reaches_will_haben_despite_low_ppm_efficiency():
         "season_avg": 8.0, "status": "fit",
     }
     result = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
-    assert result["category"] == CATEGORY_WILL_HABEN
+    assert result["category"] == CATEGORY_ALL_IN
 
 
 def test_dinkci_style_player_rank_now_weighs_more_heavily():

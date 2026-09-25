@@ -23,11 +23,16 @@ DEFAULTS: Dict[str, Any] = {
     # beeinflusst Overpay/Tradingwert am wenigsten (15%). Summe = 1.0. KEIN
     # zusaetzlicher marktwertabhaengiger Fade auf PKT/MIO mehr (das waere eine
     # doppelte Marktwert-Beruecksichtigung, siehe ppm_thresholds_for).
+    # Gewichtung (Nutzer-Korrektur, 25.9.: "Kauf-Rang + Startchance sollen mit
+    # 75% klar dominieren"; vorher 35/30/20/15). MW-Trend bleibt bewusst am
+    # niedrigsten gewichtet -- "darf einen sportlich schlechten Spieler
+    # alleine nicht zu einem hohen Overpay-Kandidaten machen" (siehe auch die
+    # separate start_probability_category_cap-Deckelung).
     "attractiveness": {
-        "rank_tier_weight": 0.35,
-        "start_probability_weight": 0.30,
-        "ppm_efficiency_weight": 0.20,
-        "market_value_trend_weight": 0.15,
+        "rank_tier_weight": 0.40,
+        "start_probability_weight": 0.35,
+        "ppm_efficiency_weight": 0.15,
+        "market_value_trend_weight": 0.10,
     },
     # "Kurzeinsatz-Joker"-Sonderfall (Nutzer-Beispiel Ruoppi, 25.9.): begrenzter
     # EIN-Kategorie-Bonus (⚪->🟢) statt einer 5. Gewichtungssaeule, siehe

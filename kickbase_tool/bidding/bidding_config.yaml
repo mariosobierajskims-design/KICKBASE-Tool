@@ -9,19 +9,22 @@
 # wie sich das Modell in deiner Liga verhaelt, ohne Python-Code zu beruehren.
 
 # Wie stark jeder Faktor in den 0..1 Attraktivitaets-Score einfliesst
-# (kickbase_tool/bidding/scoring.py). Explizite Nutzervorgabe, NICHT gleich
-# gewichtet: Kauf-Rang bildet den langfristigen sportlichen Gesamtwert am
-# besten ab (35%), Startchance ist fuer tatsaechliche Punkte am wichtigsten
-# (30%), PKT/MIO-Effizienz zaehlt fuer die Kaderoptimierung (20%), MW-Trend
-# beeinflusst Overpay/Tradingwert am wenigsten (15%). Summe = 1.0. KEIN
-# zusaetzlicher marktwertabhaengiger Fade auf PKT/MIO mehr -- das waere eine
-# doppelte Marktwert-Beruecksichtigung (die MW-Abhaengigkeit steckt schon in
-# den PPM-Schwellen selbst, siehe ppm_thresholds_for/PPM_TIERS).
+# (kickbase_tool/bidding/scoring.py). Explizite Nutzervorgabe (25.9., vorher
+# 35/30/20/15): Kauf-Rang + Startchance sollen mit zusammen 75% klar
+# dominieren -- Kauf-Rang bildet den langfristigen sportlichen Gesamtwert am
+# besten ab (40%), Startchance ist fuer tatsaechliche Punkte am wichtigsten
+# (35%), PKT/MIO-Effizienz relativ zur Marktwertklasse zaehlt fuer die
+# Kaderoptimierung (15%), MW-Trend beeinflusst Overpay/Tradingwert am
+# wenigsten (10%) -- er darf einen sportlich schlechten Spieler alleine nicht
+# zu einem hohen Overpay-Kandidaten machen. Summe = 1.0. KEIN zusaetzlicher
+# marktwertabhaengiger Fade auf PKT/MIO mehr -- das waere eine doppelte
+# Marktwert-Beruecksichtigung (die MW-Abhaengigkeit steckt schon in den
+# PPM-Schwellen selbst, siehe ppm_thresholds_for/PPM_TIERS).
 attractiveness:
-  rank_tier_weight: 0.35
-  start_probability_weight: 0.30
-  ppm_efficiency_weight: 0.20
-  market_value_trend_weight: 0.15
+  rank_tier_weight: 0.40
+  start_probability_weight: 0.35
+  ppm_efficiency_weight: 0.15
+  market_value_trend_weight: 0.10
 
 # "Kurzeinsatz-Joker"-Sonderfall (Nutzer-Beispiel Ruoppi, 25.9.): ein Spieler
 # mit vielen kurzen Einwechsel-Auftritten (wenig Einsatzminuten insgesamt),

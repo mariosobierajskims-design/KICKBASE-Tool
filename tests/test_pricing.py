@@ -85,10 +85,10 @@ def test_weak_marktwert_player_recommends_no_bid():
 
 
 def test_top_player_cold_start_produces_positive_overpay_above_market_value():
-    # Mit gleichgewichtetem Attraktivitaets-Score (Nutzervorgabe) landet dieser
-    # Spieler (starker Rang/Startchance, aber unterdurchschnittliche PKT/MIO-
-    # Effizienz bei hohem Marktwert) in WILL_HABEN statt ALL_IN -- siehe
-    # test_bidding_scoring.test_schlotterbeck_reaches_will_haben_despite_low_ppm_efficiency.
+    # Mit der rang-/startchance-dominanten Gewichtung (25.9., 40%/35%) landet
+    # dieser Spieler (Top-Rang + sichere Startchance allein ergeben schon
+    # 0.75, direkt an der ALL_IN-Schwelle 0.80) in ALL_IN statt WILL_HABEN --
+    # siehe test_bidding_scoring.test_schlotterbeck_reaches_all_in_with_rank_and_start_dominant.
     # Die eigentliche Aussage dieses Tests (positiver Overpay ueber Marktwert,
     # korrekt geordnete Gebotsspanne) ist davon unberuehrt.
     row = {
@@ -98,7 +98,7 @@ def test_top_player_cold_start_produces_positive_overpay_above_market_value():
         "season_avg": 8.0, "status": "fit",
     }
     attr = attractiveness(row, snapshot_history=None, trend={}, config=CONFIG)
-    assert attr["category"] == CATEGORY_WILL_HABEN
+    assert attr["category"] == CATEGORY_ALL_IN
 
     result = recommend_bid(
         {"market_value": row["market_value"]}, attr, None, None, NEUTRAL_MARKET_FACTOR, CONFIG
