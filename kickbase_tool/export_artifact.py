@@ -23,6 +23,7 @@ from kickbase_tool.data.repository import (
     fetch_market_players,
     fetch_owned_player_ids,
     load_dataset,
+    resolve_league_id,
 )
 from kickbase_tool.images import fetch_player_thumbnail, fetch_team_logo
 from kickbase_tool.metrics.calculations import compute_all_metrics
@@ -33,6 +34,7 @@ def build_rows(argv=None) -> tuple:
     settings = load_settings()
     client = KickbaseClient(request_delay_seconds=settings.request_delay_seconds)
     authenticate(client, settings)
+    settings = resolve_league_id(client, settings)
 
     dataset = load_dataset(client, settings, force_refresh=False)
     metrics_by_id = compute_all_metrics(dataset)

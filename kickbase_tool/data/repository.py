@@ -1,3 +1,4 @@
+import dataclasses
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -95,6 +96,31 @@ def _fetch_venue_points(
         return home_ppg, away_ppg
     except Exception:
         return {}, {}
+
+
+def resolve_league_id(client: KickbaseClient, settings: Settings) -> Settings:
+    """KICKBASE_LEAGUE_ID wird wiederholt versehentlich auf den in der
+    Kickbase-App sichtbaren Liga-ANZEIGENAMEN statt auf die numerische ID
+    gesetzt (z.B. "Nuggedi Bundesliga" statt "11520691") -- damit schlagen
+    LEAGUE_SQUAD/LEAGUE_ME/etc. mangels gueltiger ID defensiv fehl (siehe
+    fetch_owned_player_ids unten), ohne dass das auffaellt. Eine numerische
+    ID wird unveraendert durchgereicht; alles andere wird ueber
+    /v4/leagues/selection (alle Ligen des eingeloggten Nutzers, mit Namen)
+    anhand des Namens aufgeloest. Kein Treffer oder API-Fehler -> Settings
+    unveraendert, nachgelagerte Aufrufe degradieren dann wie gewohnt."""
+    if not settings.league_id or settings.league_id.strip().isdigit():
+        return settings
+    try:
+        raw = client.get(endpoints.LEAGUE_SELECTION)
+    except KickbaseAPIError:
+        return settings
+    target = settings.league_id.strip().casefold()
+    for league in as_list(raw, "it", "leagues"):
+        name = pick(league, "n", "name")
+        league_id = pick(league, "i", "id")
+        if name and league_id and str(name).strip().casefold() == target:
+            return dataclasses.replace(settings, league_id=str(league_id))
+    return settings
 
 
 def fetch_owned_player_ids(client: KickbaseClient, settings: Settings) -> set:

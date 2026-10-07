@@ -12,6 +12,12 @@
 
 LOGIN = "/v4/user/login"
 
+# Alle Ligen des eingeloggten Nutzers (Name + ID je Liga) -- confirmed live
+# 2026-10-07, genutzt um KICKBASE_LEAGUE_ID per Liganamen aufzuloesen, falls
+# dort versehentlich der Anzeigename statt der numerischen ID steht (siehe
+# kickbase_tool/data/repository.py:resolve_league_id).
+LEAGUE_SELECTION = "/v4/leagues/selection"
+
 LEAGUE_SQUAD = "/v4/leagues/{league_id}/squad"
 LEAGUE_MARKET = "/v4/leagues/{league_id}/market"
 LEAGUE_ME = "/v4/leagues/{league_id}/me"
