@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from kickbase_tool.data.models import Fixture, Player, TableEntry
@@ -21,6 +21,15 @@ TEAM_FORM_SMOOTHING_WINDOW = 5
 # UPCOMING_FIXTURES_WINDOW Gegner-Tabellenplaetze. Reihenfolge = Reihenfolge
 # der Spieltage (naechster zuerst), Laenge folgt UPCOMING_FIXTURES_WINDOW.
 UPCOMING_FIXTURES_WEIGHTS = [5, 4, 3, 2, 1]
+# Einsatzminuten-Fenster (Nutzer-Vorgabe 2026-10-17, Abschnitt 1/2): die
+# letzten MINUTES_WINDOW Saison-SPIELTAGE (nicht die letzten MINUTES_WINDOW
+# Einsaetze/Auftritte -- Unterschied zu RECENT_FORM_WINDOW oben, das ueber
+# fallback.compute_recent_form faellt auf frueher gespielte Spiele zurueck,
+# wenn zuletzt wenig gespielt wurde). Nicht gespielte Spieltage im Fenster
+# zaehlen bewusst mit 0 Minuten, damit Joker und Stammspieler fair ueber den
+# gleichen Zeitraum verglichen werden.
+MINUTES_WINDOW = 5
+MINUTES_PER_MATCHDAY = 90
 
 
 @dataclass
@@ -112,6 +121,20 @@ class PlayerMetrics:
     season_minutes_total: Optional[int] = None
     season_appearances: int = 0
     season_points_total: Optional[float] = None
+
+    # Einsatzminuten der letzten MINUTES_WINDOW Saison-Spieltage (Nutzer-
+    # Vorgabe 2026-10-17, Abschnitt 1/2) -- siehe compute_last5_minutes()
+    # fuer die genaue "nicht gespielt" (0 Min, zaehlt) vs. "Daten fehlen"
+    # (Spieltag komplett unbekannt, macht den gesamten Wert None statt eine
+    # verkuerzte, von Spieler zu Spieler unterschiedliche Teilsumme zu
+    # bilden) Unterscheidung. last5_minutes_cap ist die bei weniger als
+    # MINUTES_WINDOW abgeschlossenen Saison-Spieltagen automatisch kleinere
+    # Obergrenze (z.B. 270 statt 450 bei erst 3 Spieltagen) -- fuer Anzeige
+    # ("387/450") UND als Nenner der Ranking-Kategorie last5_minutes_ratio.
+    # last5_minutes_breakdown ist der Pro-Spieltag-Aufschluss fuers Tooltip.
+    last5_minutes_total: Optional[int] = None
+    last5_minutes_cap: int = 0
+    last5_minutes_breakdown: List[dict] = field(default_factory=list)
 
 
 TeamPointsByMatchday = Dict[Tuple[str, int], float]
@@ -331,6 +354,74 @@ def _remaining_schedule_difficulty(
     return opponents, difficulty
 
 
+def _finished_matchdays(fixtures: List[Fixture]) -> List[int]:
+    """Ein Spieltag gilt erst als abgeschlossen, wenn ALLE dafuer angesetzten
+    Spiele finished=True sind (Fixture.finished, siehe data/normalize.py) --
+    NICHT schon, wenn irgendein Spieler dafuer einen MatchdayEntry hat.
+    Waehrend ein Spieltag noch laeuft (z.B. Freitagsspiel schon vorbei,
+    Sonntagsspiele noch nicht), haben die Spieler der noch nicht gespielten
+    Partien fuer genau diesen Spieltag noch gar keinen MatchdayEntry -- das
+    waere sonst faelschlich als "Daten fehlen" statt als "Spieltag noch
+    nicht abgeschlossen" gewertet worden und haette last5_minutes_total fuer
+    fast alle Spieler grundlos auf None gesetzt."""
+    by_matchday: Dict[int, List[bool]] = {}
+    for fixture in fixtures:
+        by_matchday.setdefault(fixture.matchday, []).append(fixture.finished)
+    return sorted(md for md, flags in by_matchday.items() if flags and all(flags))
+
+
+def minutes_window_matchdays(fixtures: List[Fixture], window: int = MINUTES_WINDOW) -> List[int]:
+    """Die letzten `window` VOLLSTAENDIG abgeschlossenen Saison-Spieltage
+    (weniger, wenn die Saison selbst noch juenger ist -- Nutzer-Vorgabe: "bei
+    weniger als 5 abgeschlossenen Saisonspieltagen den tatsaechlichen
+    verfuegbaren Zeitraum verwenden"). Gleiches Fenster fuer alle Spieler,
+    damit ihre last5_minutes_total/_cap vergleichbar bleiben."""
+    all_matchdays = _finished_matchdays(fixtures)
+    return all_matchdays[-window:] if all_matchdays else []
+
+
+def compute_last5_minutes(player: Player, window_matchdays: List[int]) -> Tuple[Optional[int], List[dict]]:
+    """Einsatzminuten ueber `window_matchdays` (Saison-Spieltage, NICHT die
+    letzten `window` Einsaetze -- anders als fallback.compute_recent_form,
+    das bei Fehlzeiten weiter zurueckfaellt). Jeder Spieltag im Fenster wird
+    klassifiziert:
+
+    - "played": Eintrag vorhanden, gespielt, Minuten bekannt.
+    - "not_played": Eintrag vorhanden, aber nicht gespielt (Bank/nicht im
+      Kader) -> zaehlt bewusst mit 0 Minuten, NICHT uebersprungen, damit ein
+      aktuell verletzter oder ausgemusterter Spieler nicht durch alte hohe
+      Saisonminuten kaschiert wird und ein Rueckkehrer sich durch neue
+      Einsaetze binnen der naechsten `window` Spieltage automatisch
+      rehabilitiert, sobald die alten Nullen aus dem Fenster herausfallen.
+    - "missing": KEIN Eintrag fuer diesen Spieltag (oder Eintrag mit
+      gespielt=True aber minutes=None) -- echte Datenluecke, Nutzer-Vorgabe:
+      "zwischen 'nicht gespielt' und 'Daten fehlen' unterscheiden". Sobald
+      auch nur ein Spieltag im Fenster "missing" ist, bleibt der gesamte
+      last5_minutes_total None (neutral behandelt ueber
+      rank_with_ties missing_rank="neutral" in ranking/scoring.py) statt
+      eine verkuerzte Teilsumme ueber ein kleineres, unvergleichbares
+      Fenster zu bilden."""
+    by_matchday = {entry.matchday: entry for entry in player.matchdays}
+    breakdown: List[dict] = []
+    any_missing = False
+    total = 0
+    for matchday in window_matchdays:
+        entry = by_matchday.get(matchday)
+        if entry is None:
+            breakdown.append({"matchday": matchday, "minutes": None, "status": "missing"})
+            any_missing = True
+        elif not entry.played:
+            breakdown.append({"matchday": matchday, "minutes": 0, "status": "not_played"})
+        elif entry.minutes is not None:
+            breakdown.append({"matchday": matchday, "minutes": entry.minutes, "status": "played"})
+            total += entry.minutes
+        else:
+            breakdown.append({"matchday": matchday, "minutes": None, "status": "missing"})
+            any_missing = True
+    last5_minutes_total = None if any_missing else total
+    return last5_minutes_total, breakdown
+
+
 def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
     team_points = build_team_points_by_matchday(dataset.players)
     venue = build_venue_map(dataset.fixtures)
@@ -341,6 +432,8 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         team_points, venue, all_team_ids,
         official_home_points=dataset.home_venue_points, official_away_points=dataset.away_venue_points,
     )
+    minutes_window = minutes_window_matchdays(dataset.fixtures)
+    last5_minutes_cap = len(minutes_window) * MINUTES_PER_MATCHDAY
 
     results: Dict[str, PlayerMetrics] = {}
     for player in dataset.players:
@@ -407,6 +500,8 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
         own_momentum = team_momentum(team_points, own_team_id) if own_team_id else None
         opp_momentum = team_momentum(team_points, opponent_id) if opponent_id else None
 
+        last5_minutes_total, last5_minutes_breakdown = compute_last5_minutes(player, minutes_window)
+
         results[player.id] = PlayerMetrics(
             player=player,
             season_average=season_average,
@@ -435,5 +530,8 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             season_minutes_total=season_minutes_total,
             season_appearances=season_appearances,
             season_points_total=season_points_total,
+            last5_minutes_total=last5_minutes_total,
+            last5_minutes_cap=last5_minutes_cap,
+            last5_minutes_breakdown=last5_minutes_breakdown,
         )
     return results

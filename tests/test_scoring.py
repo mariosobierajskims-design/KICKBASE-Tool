@@ -12,7 +12,9 @@ from kickbase_tool.util import rank_with_ties
 
 
 def make_player_metrics(pid, season_avg, market_value, goals=0, assists=0, clean_sheets=0,
-                         team_form=5.0, opponent_form=5.0, team_momentum=None):
+                         team_form=5.0, opponent_form=5.0, team_momentum=None,
+                         opponent_remaining_schedule_difficulty=None,
+                         last5_minutes_total=None, last5_minutes_cap=450):
     player = Player(
         id=pid, first_name="P", last_name=pid, team_id="T1", position=4,
         status=0, market_value=market_value, season_average_points=season_avg,
@@ -27,8 +29,10 @@ def make_player_metrics(pid, season_avg, market_value, goals=0, assists=0, clean
         goals=goals, assists=assists, clean_sheets=clean_sheets,
         next_opponent_team_id="T2", next_opponent_name="Team2", next_match_is_home=True,
         upcoming_opponents=[], remaining_schedule_difficulty=None,
-        opponent_remaining_schedule_difficulty=None,
+        opponent_remaining_schedule_difficulty=opponent_remaining_schedule_difficulty,
         team_momentum=team_momentum, opponent_momentum=None,
+        last5_minutes_total=last5_minutes_total, last5_minutes_cap=last5_minutes_cap,
+        last5_minutes_breakdown=[],
     )
 
 
@@ -162,6 +166,105 @@ def test_compute_kauf_verkauf_ranking_combines_both_with_higher_is_better_scores
     assert result.scores["a"] > result.scores["b"]
     assert result.order[0] == "a"
     assert result.order[1] == "b"
+
+
+def test_last5_minutes_ratio_is_a_ranking_category_in_all_three_rankings():
+    # Nutzer-Vorgabe 2026-10-17 (2. Nachricht, Abschnitt 1/2/4): neue
+    # Einsatzminuten-Kategorie in Aufstellung (8%), Kauf (6%) und Verkauf (6%).
+    for cats in (AUFSTELLUNG_CATEGORIES, KAUF_CATEGORIES, VERKAUF_CATEGORIES):
+        assert "last5_minutes_ratio" in cats
+
+
+def test_opponent_remaining_schedule_difficulty_is_back_in_kauf_and_verkauf_only():
+    # War vor der 1. Nachricht in allen drei Rankings enthalten, fiel durch
+    # die explizite Prozentliste versehentlich komplett raus, und kommt laut
+    # Nutzer-Vorgabe Abschnitt 4 der 2. Nachricht jetzt mit 5% in Kauf UND
+    # Verkauf zurueck -- bewusst NICHT in Aufstellung (dort deckt
+    # table_position_diff bereits den naechsten einzelnen Gegner ab).
+    assert "opponent_remaining_schedule_difficulty" in KAUF_CATEGORIES
+    assert "opponent_remaining_schedule_difficulty" in VERKAUF_CATEGORIES
+    assert "opponent_remaining_schedule_difficulty" not in AUFSTELLUNG_CATEGORIES
+
+
+def test_higher_minutes_ratio_gets_a_better_rank_in_each_ranking():
+    metrics = {
+        "a": make_player_metrics("a", season_avg=10, market_value=1_000_000, last5_minutes_total=450),
+        "b": make_player_metrics("b", season_avg=10, market_value=1_000_000, last5_minutes_total=50),
+    }
+    for cats in (AUFSTELLUNG_CATEGORIES, KAUF_CATEGORIES, VERKAUF_CATEGORIES):
+        result = compute_ranking(metrics, cats, weights={c: 1.0 for c in cats})
+        assert result.category_ranks["last5_minutes_ratio"]["a"] == 1
+        assert result.order[0] == "a"
+
+
+def test_missing_minutes_data_is_treated_neutrally_not_as_worst_rank():
+    # Nutzer-Vorgabe: "Bei fehlenden Minutendaten zwischen 'nicht gespielt'
+    # und 'Daten fehlen' unterscheiden" -- compute_last5_minutes liefert fuer
+    # echte Datenluecken last5_minutes_total=None, das darf den Spieler nicht
+    # automatisch ans Tabellenende drueken (missing_rank="neutral" in
+    # compute_ranking, wie bei allen anderen Kategorien mit fehlenden Werten).
+    metrics = {
+        "a": make_player_metrics("a", season_avg=10, market_value=1_000_000, last5_minutes_total=450),
+        "b": make_player_metrics("b", season_avg=10, market_value=1_000_000, last5_minutes_total=400),
+        "d": make_player_metrics("d", season_avg=10, market_value=1_000_000, last5_minutes_total=0),
+        "c": make_player_metrics("c", season_avg=10, market_value=1_000_000, last5_minutes_total=None),
+    }
+    result = compute_ranking(metrics, KAUF_CATEGORIES, weights={c: 1.0 for c in KAUF_CATEGORIES})
+    ranks = result.category_ranks["last5_minutes_ratio"]
+    # c (Datenluecke) liegt zwischen dem zweitbesten (b) und dem
+    # schlechtesten bestaetigten Wert (d, 0 Minuten) -- weder gleichauf mit
+    # dem besten noch automatisch ans Ende gedrueckt.
+    assert ranks["a"] == 1
+    assert ranks["b"] == 2
+    assert ranks["b"] < ranks["c"] < ranks["d"]
+    assert ranks["d"] == 3
+
+
+def test_an_injured_player_with_high_season_minutes_is_not_automatically_ranked_high():
+    # Nutzer-Vorgabe: "Ein Spieler mit 450 Minuten, der aktuell verletzt ist,
+    # darf deshalb nicht automatisch hoch eingestuft werden." last5_minutes_total
+    # bildet nur die JUENGSTEN 5 Spieltage ab, nicht die Season-Gesamtminuten
+    # -- ein aktuell verletzter Spieler (0 juengste Minuten) darf also nicht
+    # besser wegkommen als ein aktiver Spieler, selbst wenn season_minutes_total
+    # (reine Anzeige, nicht gewichtet) bei ihm historisch hoch war.
+    injured_but_historically_heavy_minutes = make_player_metrics(
+        "injured", season_avg=10, market_value=1_000_000, last5_minutes_total=0,
+    )
+    injured_but_historically_heavy_minutes.season_minutes_total = 2000
+    active = make_player_metrics("active", season_avg=10, market_value=1_000_000, last5_minutes_total=450)
+    metrics = {"injured": injured_but_historically_heavy_minutes, "active": active}
+    result = compute_ranking(metrics, AUFSTELLUNG_CATEGORIES, weights={c: 1.0 for c in AUFSTELLUNG_CATEGORIES})
+    assert result.order[0] == "active"
+
+
+def test_returnee_rehabilitates_once_last5_minutes_total_reflects_full_window():
+    # Spiegelt metrics/calculations.py's last5_minutes_total-Verhalten auf
+    # Ranking-Ebene: sobald der Wert (von aussen, z.B. nach Rueckkehr aus
+    # Verletzung) wieder volle 450 Minuten zeigt, zaehlt das genauso wie bei
+    # einem durchgehenden Stammspieler -- keine Nachwirkung alter Ausfaelle.
+    returnee = make_player_metrics("returnee", season_avg=10, market_value=1_000_000, last5_minutes_total=450)
+    ever_present = make_player_metrics("ever_present", season_avg=10, market_value=1_000_000, last5_minutes_total=450)
+    metrics = {"returnee": returnee, "ever_present": ever_present}
+    result = compute_ranking(metrics, AUFSTELLUNG_CATEGORIES, weights={c: 1.0 for c in AUFSTELLUNG_CATEGORIES})
+    assert result.scores["returnee"] == result.scores["ever_present"]
+
+
+def test_season_start_uses_smaller_cap_without_penalizing_players():
+    # Zu Saisonbeginn (last5_minutes_cap < 450, siehe
+    # minutes_window_matchdays) soll ein Spieler mit vollen Minuten in dem
+    # kuerzeren Fenster trotzdem den besten Rang bekommen wie ein
+    # Stammspieler spaeter in der Saison -- die Kategorie arbeitet mit dem
+    # Anteil (ratio), nicht mit der absoluten Minutenzahl.
+    early_season_regular = make_player_metrics(
+        "early", season_avg=10, market_value=1_000_000, last5_minutes_total=180, last5_minutes_cap=180,
+    )
+    early_season_bench = make_player_metrics(
+        "bench", season_avg=10, market_value=1_000_000, last5_minutes_total=20, last5_minutes_cap=180,
+    )
+    metrics = {"early": early_season_regular, "bench": early_season_bench}
+    result = compute_ranking(metrics, AUFSTELLUNG_CATEGORIES, weights={c: 1.0 for c in AUFSTELLUNG_CATEGORIES})
+    assert result.category_ranks["last5_minutes_ratio"]["early"] == 1
+    assert result.order[0] == "early"
 
 
 def test_compute_kauf_verkauf_ranking_replaces_separate_kauf_and_verkauf_ranks():

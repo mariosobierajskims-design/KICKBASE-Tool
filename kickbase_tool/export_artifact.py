@@ -145,6 +145,14 @@ def build_rows(argv=None) -> tuple:
             "points_per_value": pm.points_per_market_value,
             "season_minutes_total": pm.season_minutes_total,
             "season_appearances": pm.season_appearances,
+            # Neue MINUTEN-Spalte (Nutzer-Vorgabe 2026-10-17, Abschnitt 1):
+            # last5_minutes_total/_cap zusammen ergeben die Anzeige
+            # "387/450"; _cap faellt bei juenger Saison automatisch kleiner
+            # aus (siehe metrics/calculations.py::minutes_window_matchdays).
+            # _breakdown ist der Pro-Spieltag-Aufschluss fuers Tooltip.
+            "last5_minutes_total": pm.last5_minutes_total,
+            "last5_minutes_cap": pm.last5_minutes_cap,
+            "last5_minutes_breakdown": pm.last5_minutes_breakdown,
             "season_points_total": pm.season_points_total,
             "start_probability": pm.start_probability,
             "market_value_change_day": pm.market_value_change_day,

@@ -55,25 +55,49 @@ CATEGORY_DEFINITIONS = {
         lambda pm: (pm.team_form - pm.opponent_form) if pm.team_form is not None and pm.opponent_form is not None else None,
         True,
     ),
+    # Einsatzminuten der letzten MINUTES_WINDOW Saison-Spieltage, als Anteil
+    # an den in diesem Fenster maximal moeglichen Minuten (Nutzer-Vorgabe
+    # 2026-10-17, Abschnitt 1/2) -- siehe
+    # metrics/calculations.py::compute_last5_minutes fuer die "nicht
+    # gespielt" (zaehlt als 0) vs. "Daten fehlen" (macht den ganzen Wert
+    # None) Unterscheidung. None faellt ueber missing_rank="neutral" in
+    # compute_ranking() neutral, statt einen aktuell verletzten oder neu
+    # transferierten Spieler mit dem schlechtesten Rang zu bestrafen.
+    "last5_minutes_ratio": (
+        lambda pm: (pm.last5_minutes_total / pm.last5_minutes_cap)
+        if (pm.last5_minutes_total is not None and pm.last5_minutes_cap)
+        else None,
+        True,
+    ),
 }
 
 # Aufstellungsrang: rein sportlich, inkl. Punkte pro Marktwert (Nutzer-Vorgabe
 # 2026-10-17 -- vorher war market_value/points_per_value komplett aussen vor;
-# jetzt explizit mit 4.5% Gewicht Teil der Aufstellungsbewertung).
+# jetzt explizit mit 4.5% Gewicht Teil der Aufstellungsbewertung). Einsatz-
+# minuten der letzten 5 Spieltage (last5_minutes_ratio) kamen in der
+# Nutzer-Vorgabe vom selben Tag, 2. Nachricht, dazu (8%/6%/6%); das
+# Restprogramm der naechsten 5 Gegner (opponent_remaining_schedule_difficulty)
+# kommt in dieser 2. Nachricht nur fuer Kauf/Verkauf zurueck (5% je), nicht
+# fuer Aufstellung -- dort deckt table_position_diff bereits den naechsten
+# einzelnen Gegner ab, waehrend Kauf/Verkauf als mehrwoechige Wertentscheidung
+# zusaetzlich den laengeren Blick nach vorn gewichtet bekommen.
 AUFSTELLUNG_CATEGORIES = [
     "season_avg", "goals", "assists", "clean_sheets", "recent_avg", "team_form",
     "table_position_diff", "recent_min_max_avg", "points_per_value", "opponent_form",
     "team_opponent_form_diff", "team_momentum", "own_venue_rank", "opponent_venue_rank",
+    "last5_minutes_ratio",
 ]
 
 KAUF_CATEGORIES = [
     "season_avg", "recent_avg", "points_per_value", "goals", "assists", "clean_sheets",
     "team_form", "team_momentum", "opponent_form", "own_venue_rank",
+    "last5_minutes_ratio", "opponent_remaining_schedule_difficulty",
 ]
 
 VERKAUF_CATEGORIES = [
     "season_avg", "recent_avg", "points_per_value", "team_form", "team_momentum",
     "goals", "assists", "clean_sheets",
+    "last5_minutes_ratio", "opponent_remaining_schedule_difficulty",
 ]
 
 

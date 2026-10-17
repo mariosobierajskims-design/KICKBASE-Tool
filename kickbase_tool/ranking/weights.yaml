@@ -33,46 +33,63 @@
 #   team_momentum               Formanstieg (eigene Formsteigerung)
 #   own_venue_rank               Heim-/Auswaertsstaerke des eigenen Teams
 #   opponent_venue_rank          Heim-/Auswaertsstaerke des Gegners
+#   last5_minutes_ratio          Einsatzminuten der letzten 5 Saison-Spieltage,
+#                               als Anteil an den dort maximal moeglichen
+#                               Minuten (siehe metrics/calculations.py::
+#                               compute_last5_minutes)
+#   opponent_remaining_schedule_difficulty
+#                               Restprogramm-Schwierigkeit der naechsten 5
+#                               Gegner (nur Kauf/Verkauf, nicht Aufstellung --
+#                               dort deckt table_position_diff bereits den
+#                               naechsten einzelnen Gegner ab)
 #
 # Kennzahl 14 (Verletzt/Gesperrt) ist kein Rang-Kriterium -- betroffene
-# Spieler bleiben ganz normal mit echten Werten in beiden Rankings.
+# Spieler bleiben ganz normal mit echten Werten in beiden Rankings; die
+# last5_minutes_ratio-Kategorie oben faengt den Effekt eines aktuellen
+# Ausfalls (0 Minuten in den juengsten Spieltagen) bzw. einer vollstaendigen
+# Rueckkehr automatisch ueber das rollierende 5-Spieltage-Fenster ab.
 # Kennzahl 13 (Startelf-Wahrscheinlichkeit) ist weiterhin nicht Teil der
 # Rankings.
 
 aufstellung:
-  season_avg: 20
-  goals: 12.41
-  assists: 4.83
-  clean_sheets: 2.76
-  recent_avg: 9.5
-  team_form: 9.5
-  table_position_diff: 9.5
-  recent_min_max_avg: 4.5
-  points_per_value: 4.5
-  opponent_form: 4.5
-  team_opponent_form_diff: 4.5
-  team_momentum: 4.5
-  own_venue_rank: 4.5
-  opponent_venue_rank: 4.5
+  season_avg: 18.4
+  goals: 11.4172
+  assists: 4.4436
+  clean_sheets: 2.5392
+  recent_avg: 8.74
+  team_form: 8.74
+  table_position_diff: 8.74
+  recent_min_max_avg: 4.14
+  points_per_value: 4.14
+  opponent_form: 4.14
+  team_opponent_form_diff: 4.14
+  team_momentum: 4.14
+  own_venue_rank: 4.14
+  opponent_venue_rank: 4.14
+  last5_minutes_ratio: 8.0
 
 kauf:
-  season_avg: 20
-  recent_avg: 20
-  points_per_value: 15
-  goals: 9.31
-  assists: 3.62
-  clean_sheets: 2.07
-  team_form: 10
-  team_momentum: 10
-  opponent_form: 5
-  own_venue_rank: 5
+  season_avg: 17.8
+  recent_avg: 17.8
+  points_per_value: 13.35
+  goals: 8.2859
+  assists: 3.2218
+  clean_sheets: 1.8423
+  team_form: 8.9
+  team_momentum: 8.9
+  opponent_form: 4.45
+  own_venue_rank: 4.45
+  last5_minutes_ratio: 6.0
+  opponent_remaining_schedule_difficulty: 5.0
 
 verkauf:
-  season_avg: 35
-  recent_avg: 17.5
-  points_per_value: 17.5
-  team_form: 10
-  team_momentum: 10
-  goals: 6.21
-  assists: 2.41
-  clean_sheets: 1.8
+  season_avg: 31.0197
+  recent_avg: 15.5099
+  points_per_value: 15.5099
+  team_form: 8.8628
+  team_momentum: 8.8628
+  goals: 5.5038
+  assists: 2.1359
+  clean_sheets: 1.5953
+  last5_minutes_ratio: 6.0
+  opponent_remaining_schedule_difficulty: 5.0
