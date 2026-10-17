@@ -46,10 +46,19 @@ def as_list(data: Any, *keys: str) -> list:
     return []
 
 
-def rank_with_ties(values: dict, higher_is_better: bool) -> dict:
+def rank_with_ties(values: dict, higher_is_better: bool, missing_rank: str = "worst") -> dict:
     """Rank a {id: value} mapping, 1 = best. Ties share the average rank.
-    Missing (None) values get the worst possible rank so incomplete data is
-    penalized instead of silently ignored.
+
+    `missing_rank` controls what a None value gets:
+    - "worst" (default, preserves all existing callers' behaviour): the worst
+      possible rank (n), so incomplete data is penalized instead of silently
+      ignored.
+    - "neutral" (used by the Aufstellung/Kauf/Verkauf category ranking in
+      ranking/scoring.py, on explicit user request): the average rank
+      (n + 1) / 2, so a player missing one metric (e.g. "Formanstieg" before
+      enough matchdays are playable) is neither rewarded nor punished for
+      that single category -- no artificial zero/worst rating just because a
+      data point isn't available yet.
     """
     n = len(values)
     present = {k: v for k, v in values.items() if v is not None}
@@ -65,9 +74,10 @@ def rank_with_ties(values: dict, higher_is_better: bool) -> dict:
             for k in range(i, j + 1):
                 ranks[ordered[k][0]] = avg_rank
             i = j + 1
+    missing_value = float(n) if missing_rank == "worst" else (n + 1) / 2
     for key in values:
         if key not in ranks:
-            ranks[key] = float(n)
+            ranks[key] = missing_value
     return ranks
 
 

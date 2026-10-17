@@ -169,10 +169,19 @@ def build_rows(argv=None) -> tuple:
             "clean_sheets": pm.clean_sheets,
             "aufstellung_score": rankings["aufstellung"].scores.get(pid),
             "aufstellung_rank": rank_position["aufstellung"].get(pid),
-            "kauf_score": rankings["kauf"].scores.get(pid),
-            "kauf_rank": rank_position["kauf"].get(pid),
-            "verkauf_score": rankings["verkauf"].scores.get(pid),
-            "verkauf_rank": rank_position["verkauf"].get(pid),
+            # kauf_rank/kauf_score sind jetzt der gemeinsame Kauf-/Verkaufsrang
+            # (50% Kaufwertung + 50% Verkaufswertung, siehe
+            # ranking/scoring.py::compute_kauf_verkauf_ranking) -- es gibt
+            # keinen separaten verkauf_rank/verkauf_score mehr (Nutzer-Vorgabe
+            # Abschnitt 4: "Die bisherigen getrennten Kauf- und
+            # Verkaufsraenge durch einen gemeinsamen Kauf-/Verkaufsrang
+            # ersetzen"). Feldname bleibt bewusst "kauf_rank" (statt
+            # "kauf_verkauf_rank"), damit das Gebotsmodell in
+            # kickbase_tool/bidding/ (liest row["kauf_rank"] an vielen
+            # Stellen) unveraendert funktioniert und automatisch vom
+            # verbesserten kombinierten Signal profitiert.
+            "kauf_score": rankings["kauf_verkauf"].scores.get(pid),
+            "kauf_rank": rank_position["kauf_verkauf"].get(pid),
         })
 
     # Gebotsmodell (kickbase_tool/bidding/): eigenkapselt und defensiv --

@@ -1,116 +1,78 @@
-# Gewichtung pro Kategorie fuer die drei Rankings.
+# Gewichtung pro Kategorie fuer die beiden Rankings (Aufstellung, Kauf/Verkauf).
 #
-# Die finale Platzierung ist der gewichtete Durchschnitt der Rang-Platzierungen
-# (1 = beste Auspraegung) ueber alle hier gelisteten Kategorien einer Sektion.
+# Aufstellung: gewichteter Durchschnitt der Rang-Platzierungen (1 = beste
+# Auspraegung) ueber alle hier gelisteten Kategorien -- siehe
+# ranking/scoring.py::compute_ranking.
 #
-# Werte unten sind aus dem eigenen Google-Sheet des Nutzers uebernommen, wo eine
-# entsprechende Kategorie dort eine Formel-Gewichtung hatte (siehe README
-# "Live-Stand der Feldnamen" / Abgleich vom 2026-09-05). Kategorien ohne
-# Entsprechung im Sheet behalten den Standardwert 1.0. Die absolute Groessenordnung
-# ist egal (es wird durch die Gewichtssumme geteilt) -- nur das Verhaeltnis
-# zwischen den Kategorien zaehlt. Frei anpassbar, ohne Code aendern zu muessen.
+# Kauf/Verkauf: "kauf" und "verkauf" unten sind ZWEI SEPARATE Teilwertungen,
+# die zu einem gemeinsamen Kauf-/Verkaufsrang verschmolzen werden (je 50%,
+# siehe ranking/scoring.py::compute_kauf_verkauf_ranking) -- es gibt keinen
+# eigenen, sichtbaren Verkaufsrang mehr.
 #
-# Kategorie-Schluessel (entsprechen den Kennzahlen aus der Aufgabenstellung):
-#   season_avg                          (1)  Punkte-Durchschnitt Saison
-#   recent_avg                          (2)  Punkte-Durchschnitt letzte 5 Spiele (mit Fallback)
-#   recent_min                          (3)  Minimum letzte 5 Spiele
-#   recent_max                          (4)  Maximum letzte 5 Spiele
-#   recent_min_max_avg                  (5)  Durchschnitt aus Min/Max
-#   market_value                        (6)  Aktueller Marktwert -- seit der Entschlackung in KEINEM
-#                                             der drei Rankings mehr Teil der Gewichtung (Aufstellung
-#                                             soll rein sportlich sein; Kauf/Verkauf nutzen stattdessen
-#                                             points_per_value). Bleibt nur als Rohwert/Spalte erhalten.
-#   points_per_value                    (7)  Punkte pro Marktwert (nur Kauf/Verkauf)
-#   team_form                           (8)  Team-Form (letzte 5 Spiele)
-#   opponent_form                       (9)  Gegner-Form (naechster Spieltag)
-#   table_position_diff                 (10) Tabellenplatz-Differenz zum naechsten Gegner --
-#                                             NICHT die offizielle Bundesliga-Tabelle, sondern
-#                                             eine selbst gebaute "Form-Tabelle" (alle 18 Teams
-#                                             nach ihrem eigenen team_form-Wert gerankt)
-#   own_venue_rank                      (11a) Rang des EIGENEN Teams in der Heim- bzw.
-#                                             Auswaerts-Tabelle (je nachdem wo das naechste
-#                                             Spiel stattfindet). 1 = staerkstes Team dort.
-#   opponent_venue_rank                 (11b) Rang des GEGNERS in der jeweils fuer ihn
-#                                             passenden Tabelle (Heim, wenn er Heimrecht hat,
-#                                             sonst Auswaerts)
-#   venue_rank_diff                     (11c) Differenz der beiden Raenge oben (groesster
-#                                             Unterschied = beste Punktzahl)
-#   goals_assists_cleansheets           (12) Tore/Vorlagen/zu-Null (kombiniert, intern 90:35:20 gewichtet)
-#   opponent_remaining_schedule_difficulty (Gegner-Restprogramm) Ø Tabellenplatz der naechsten
-#                                             5 Gegner DES GEGNERS -- schweres Restprogramm fuer
-#                                             ihn wird als gut fuer unseren Spieler gewertet
-#   opponent_momentum                   (Gegner-Formsteigerung) Formsteigerung des Gegners --
-#                                             ein schwacher/abfallender Gegner ist gut fuer uns
+# Werte sind RELATIVE Gewichte (werden durch ihre Summe pro Sektion geteilt,
+# muessen sich also nicht exakt zu 1.0 aufsummieren) -- nur das Verhaeltnis
+# zwischen den Kategorien einer Sektion zaehlt. Frei anpassbar, ohne Code
+# aendern zu muessen.
 #
-# Datenquelle fuer own_venue_rank/opponent_venue_rank/venue_rank_diff: echte
-# offizielle Bundesliga-Heim/Auswaerts-Punkte-pro-Spiel ueber die freie
-# OpenLigaDB-API (kicker.de ist aus dieser Umgebung per Egress-Proxy
-# blockiert; OpenLigaDB liefert dieselben offiziellen Ergebnisse als JSON,
-# siehe kickbase_tool/data/openligadb.py). Faellt automatisch auf eine
-# Kickbase-interne Fantasy-Punkte-Schaetzung zurueck, falls der Abruf mal
-# fehlschlaegt oder ein Verein sich nicht zuordnen laesst.
+# Kategorie-Schluessel:
+#   season_avg                 Punkte-Durchschnitt Saison
+#   recent_avg                 Punkte-Durchschnitt letzte 5 Spiele (mit Fallback)
+#   recent_min_max_avg         Mix aus Minimum und Maximum der letzten 5 Spiele
+#   points_per_value           Punkte pro Marktwert
+#   goals / assists / clean_sheets
+#                               Tore / Vorlagen / Zu-null-Spiele -- je eigene
+#                               Kategorie (Verhaeltnis zueinander bewusst
+#                               ca. 4.5 : 1.75 : 1, wie zuvor als gebuendelte
+#                               Kennzahl)
+#   team_form                  Team-Form (letzte 5 Spiele, geglaettet)
+#   opponent_form               Gegner-Form (naechster Spieltag)
+#   table_position_diff         Tabellenplatz-Differenz zum naechsten Gegner
+#                               (Form-Tabelle, nicht die offizielle Bundesliga-Tabelle)
+#   team_opponent_form_diff     Differenz zwischen eigener Teamform und Gegnerform
+#                               (rohe Punktedifferenz, nicht Rang-basiert)
+#   team_momentum               Formanstieg (eigene Formsteigerung)
+#   own_venue_rank               Heim-/Auswaertsstaerke des eigenen Teams
+#   opponent_venue_rank          Heim-/Auswaertsstaerke des Gegners
 #
-# Kennzahl 14 (Verletzt/Gesperrt) ist kein Rang-Kriterium, sondern ein harter
-# Ausschlussfilter -- betroffene Spieler tauchen in keinem der drei Rankings auf.
-# Kennzahl 13 (Startelf-Wahrscheinlichkeit) ist auf Nutzerwunsch weiterhin nicht
-# Teil der Rankings. Kennzahl 15 (Restprogramm-Schwierigkeit) ist fuer das
-# EIGENE Team weiterhin nur eine Info-Spalte, fliesst aber fuer den GEGNER als
-# eigene Kategorie (opponent_remaining_schedule_difficulty) mit ein.
+# Kennzahl 14 (Verletzt/Gesperrt) ist kein Rang-Kriterium -- betroffene
+# Spieler bleiben ganz normal mit echten Werten in beiden Rankings.
+# Kennzahl 13 (Startelf-Wahrscheinlichkeit) ist weiterhin nicht Teil der
+# Rankings.
 
-# Nutzer-Korrektur 2026-09-22 (Vereinfachung "Spielerkartei entschlacken"):
-# - recent_min/recent_max waren ueberall mit 1.0 gewichtet, dem hoechsten Wert
-#   der gesamten Tabelle -- ein einzelnes Extremspiel durfte dadurch das ganze
-#   Ranking dominieren. Jetzt nur noch eine sehr geringe Stabilitaets-Info.
-# - market_value fliegt komplett aus dem Aufstellungsrang (siehe scoring.py).
-# - verkauf nutzt jetzt dieselbe (entschlackte) Gewichtung wie kauf statt
-#   eigener extremer Sonder-Gewichte -- der Verkaufsrang ist nur noch eine
-#   Hintergrund-Berechnung, keine eigene Detail-Optimierung mehr wert.
 aufstellung:
-  season_avg: 0.2
-  recent_avg: 0.095
-  recent_min: 0.05
-  recent_max: 0.05
-  recent_min_max_avg: 0.045
-  team_form: 0.095
-  opponent_form: 0.045
-  table_position_diff: 1.0
-  own_venue_rank: 0.09
-  opponent_venue_rank: 0.09
-  venue_rank_diff: 0.185
-  goals_assists_cleansheets: 0.2
-  opponent_remaining_schedule_difficulty: 0.045
-  opponent_momentum: 0.045
+  season_avg: 20
+  goals: 12.41
+  assists: 4.83
+  clean_sheets: 2.76
+  recent_avg: 9.5
+  team_form: 9.5
+  table_position_diff: 9.5
+  recent_min_max_avg: 4.5
+  points_per_value: 4.5
+  opponent_form: 4.5
+  team_opponent_form_diff: 4.5
+  team_momentum: 4.5
+  own_venue_rank: 4.5
+  opponent_venue_rank: 4.5
 
 kauf:
-  season_avg: 0.2
-  recent_avg: 0.2
-  recent_min: 0.05
-  recent_max: 0.05
-  recent_min_max_avg: 1.0
-  points_per_value: 0.15
-  team_form: 0.1
-  opponent_form: 0.05
-  table_position_diff: 1.0
-  own_venue_rank: 0.025
-  opponent_venue_rank: 0.025
-  venue_rank_diff: 0.05
-  goals_assists_cleansheets: 0.15
-  opponent_remaining_schedule_difficulty: 0.05
-  opponent_momentum: 0.05
+  season_avg: 20
+  recent_avg: 20
+  points_per_value: 15
+  goals: 9.31
+  assists: 3.62
+  clean_sheets: 2.07
+  team_form: 10
+  team_momentum: 10
+  opponent_form: 5
+  own_venue_rank: 5
 
 verkauf:
-  season_avg: 0.2
-  recent_avg: 0.2
-  recent_min: 0.05
-  recent_max: 0.05
-  recent_min_max_avg: 1.0
-  points_per_value: 0.15
-  team_form: 0.1
-  opponent_form: 0.05
-  table_position_diff: 1.0
-  own_venue_rank: 0.025
-  opponent_venue_rank: 0.025
-  venue_rank_diff: 0.05
-  goals_assists_cleansheets: 0.15
-  opponent_remaining_schedule_difficulty: 0.05
-  opponent_momentum: 0.05
+  season_avg: 35
+  recent_avg: 17.5
+  points_per_value: 17.5
+  team_form: 10
+  team_momentum: 10
+  goals: 6.21
+  assists: 2.41
+  clean_sheets: 1.8

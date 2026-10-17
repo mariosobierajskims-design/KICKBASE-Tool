@@ -15,8 +15,7 @@ from kickbase_tool.ranking.scoring import DEFAULT_WEIGHTS_PATH, compute_all_rank
 
 RANKING_TITLES = {
     "aufstellung": "Aufstellung (aktuelle Spieltag-Performance)",
-    "kauf": "Kauf-Empfehlung",
-    "verkauf": "Verkaufs-Kandidaten",
+    "kauf_verkauf": "Kauf-/Verkaufs-Empfehlung",
 }
 
 
