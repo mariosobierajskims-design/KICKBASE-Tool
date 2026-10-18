@@ -27,6 +27,11 @@ from kickbase_tool.data.repository import (
 )
 from kickbase_tool.images import fetch_player_thumbnail, fetch_team_logo
 from kickbase_tool.metrics.calculations import compute_all_metrics
+from kickbase_tool.metrics.matchup import (
+    build_team_strengths,
+    calibrate_thresholds,
+    compute_team_matchday_forecasts,
+)
 from kickbase_tool.ranking.scoring import compute_all_rankings
 
 
@@ -39,6 +44,21 @@ def build_rows(argv=None) -> tuple:
     dataset = load_dataset(client, settings, force_refresh=False)
     metrics_by_id = compute_all_metrics(dataset)
     rankings = compute_all_rankings(metrics_by_id)
+
+    # Spielergebnis-Prognose / Spieltagsbewertung (Nutzer-Vorgabe 2026-10-18):
+    # einmal pro Export berechnet, dann je Spieler ueber sein team_id
+    # uebernommen (siehe "matchday_forecast" im row-Dict unten) -- Spieler
+    # desselben Teams teilen sich denselben Forecast. Jeder Fehler hier
+    # degradiert zu "kein Forecast" statt den Kernexport zu gefaehrden,
+    # gleiches Muster wie owned_ids/cash_balance/bids_by_pid in dieser Datei.
+    try:
+        team_strengths = build_team_strengths(dataset)
+        matchup_thresholds = calibrate_thresholds(dataset, team_strengths)
+        matchday_forecasts_by_team = compute_team_matchday_forecasts(
+            dataset, team_strengths, matchup_thresholds
+        )
+    except Exception:
+        matchday_forecasts_by_team = {}
 
     try:
         owned_ids = fetch_owned_player_ids(client, settings)
@@ -190,6 +210,14 @@ def build_rows(argv=None) -> tuple:
             # verbesserten kombinierten Signal profitiert.
             "kauf_score": rankings["kauf_verkauf"].scores.get(pid),
             "kauf_rank": rank_position["kauf_verkauf"].get(pid),
+            # Spielergebnis-Prognose fuer die naechsten 5 Spieltage DIESES
+            # Spielers Team (siehe metrics/matchup.py) -- je Eintrag:
+            # matchday, opponent_team_id/opponent_name, home, diff, label,
+            # emoji, quality (0..1, fuer die Spieltagsbewertung im
+            # Artifact-Frontend), points_multiplier (milder Faktor fuer die
+            # Punktprognose). Leere Liste, falls die Berechnung fehlschlug
+            # oder das Team keine anstehenden Spiele mehr hat.
+            "matchday_forecast": matchday_forecasts_by_team.get(p.team_id, []),
         })
 
     # Gebotsmodell (kickbase_tool/bidding/): eigenkapselt und defensiv --

@@ -31,6 +31,7 @@ class Dataset:
         fixtures: List[Fixture],
         home_venue_points: Dict[str, float] = None,
         away_venue_points: Dict[str, float] = None,
+        finished_results: List[dict] = None,
     ):
         self.players = players
         self.table = table
@@ -42,6 +43,13 @@ class Dataset:
         # fall back to a Kickbase-internal fantasy-points estimate in that case.
         self.home_venue_points = home_venue_points or {}
         self.away_venue_points = away_venue_points or {}
+        # Real finished-match outcomes this season (home/draw/away), mapped to
+        # Kickbase team_ids -- same OpenLigaDB source as the venue points
+        # above, reused (not a second fetch) to CALIBRATE the Spielergebnis-
+        # Prognose thresholds in metrics/matchup.py against actual results.
+        # Empty on any fetch/mapping failure (see _fetch_venue_points below);
+        # matchup.calibrate_thresholds() falls back to static thresholds then.
+        self.finished_results = finished_results or []
 
 
 def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool = False) -> Dataset:
@@ -68,11 +76,14 @@ def load_dataset(client: KickbaseClient, settings: Settings, force_refresh: bool
         client, settings, cache, player_ids_by_team, roster_extra_by_pid, force_refresh=force_refresh
     )
 
-    home_venue_points, away_venue_points = _fetch_venue_points(cache, settings, table, force_refresh=force_refresh)
+    home_venue_points, away_venue_points, finished_results = _fetch_venue_points(
+        cache, settings, table, force_refresh=force_refresh
+    )
 
     return Dataset(
         players=players, table=table, fixtures=fixtures,
         home_venue_points=home_venue_points, away_venue_points=away_venue_points,
+        finished_results=finished_results,
     )
 
 
@@ -80,8 +91,11 @@ def _fetch_venue_points(
     cache: JsonFileCache, settings: Settings, table: List[TableEntry], force_refresh: bool
 ) -> tuple:
     """Best-effort: any failure (network, unexpected response shape, name-
-    matching mismatch) degrades to empty dicts rather than breaking the whole
-    pipeline -- this is a supplementary data source, not core Kickbase data."""
+    matching mismatch) degrades to empty dicts/list rather than breaking the
+    whole pipeline -- this is a supplementary data source, not core Kickbase
+    data. Returns (home_ppg, away_ppg, finished_results) -- finished_results
+    (real match outcomes, see openligadb.extract_finished_results) reuses the
+    SAME cached matches_raw fetch as home_ppg/away_ppg, no second request."""
     try:
         matches_raw = cache.get_or_fetch(
             f"openligadb_matches_{settings.openligadb_league_shortcut}_{settings.openligadb_season}",
@@ -93,9 +107,10 @@ def _fetch_venue_points(
         team_name_by_id = {t.team_id: t.team_name for t in table}
         home_ppg = openligadb.map_shortnames_to_kickbase_ids(openligadb.points_per_game(home_stats), team_name_by_id)
         away_ppg = openligadb.map_shortnames_to_kickbase_ids(openligadb.points_per_game(away_stats), team_name_by_id)
-        return home_ppg, away_ppg
+        finished_results = openligadb.extract_finished_results(matches_raw, team_name_by_id)
+        return home_ppg, away_ppg, finished_results
     except Exception:
-        return {}, {}
+        return {}, {}, []
 
 
 def resolve_league_id(client: KickbaseClient, settings: Settings) -> Settings:

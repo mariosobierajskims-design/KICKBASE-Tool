@@ -213,6 +213,18 @@ def team_form(
     return mean(rolling_values)
 
 
+def team_season_average(team_points: TeamPointsByMatchday, team_id: str) -> Optional[float]:
+    """Langfristige Teamstaerke (Nutzer-Vorgabe, Spielergebnis-Prognose
+    Faktor 4, 15% Gewicht): schlichter Durchschnitt der Team-Punkte ueber
+    ALLE bisher gespielten Saison-Spieltage -- bewusst NICHT das rollierende,
+    geglaettete team_form() (das deckt Faktor 1, "Teamform der letzten 5
+    Spiele", bereits ab). None, falls das Team noch kein Saisonspiel hat."""
+    matchdays = _team_matchdays(team_points, team_id)
+    if not matchdays:
+        return None
+    return mean(team_points[(team_id, m)] for m in matchdays)
+
+
 def team_venue_form(
     team_points: TeamPointsByMatchday, venue: VenueMap, team_id: str, home: bool
 ) -> Optional[float]:

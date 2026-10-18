@@ -102,6 +102,39 @@ def map_shortnames_to_kickbase_ids(ppg_by_shortname: Dict[str, float], team_name
     return result
 
 
+def extract_finished_results(matches: list, team_name_by_id: Dict[str, str]) -> List[dict]:
+    """Returns one dict per finished match with real outcome ("home"/"draw"/
+    "away"), mapped to Kickbase team_ids -- used by metrics/matchup.py to
+    CALIBRATE the Spielergebnis-Prognose thresholds against actual results
+    this season, instead of inventing cutoff numbers. Matches that can't be
+    mapped to a Kickbase team_id (unmatched shortName, see TEAM_NAME_ALIASES)
+    are silently dropped, same degrade-gracefully approach as
+    map_shortnames_to_kickbase_ids above."""
+    name_to_id = {name: tid for tid, name in team_name_by_id.items()}
+    results: List[dict] = []
+    for m in matches:
+        score = _final_score(m)
+        if score is None:
+            continue
+        goals1, goals2 = score
+        team1 = (m.get("team1") or {}).get("shortName")
+        team2 = (m.get("team2") or {}).get("shortName")
+        if not team1 or not team2:
+            continue
+        home_id = name_to_id.get(TEAM_NAME_ALIASES.get(team1, team1))
+        away_id = name_to_id.get(TEAM_NAME_ALIASES.get(team2, team2))
+        if not home_id or not away_id:
+            continue
+        if goals1 > goals2:
+            outcome = "home"
+        elif goals1 < goals2:
+            outcome = "away"
+        else:
+            outcome = "draw"
+        results.append({"home_team_id": home_id, "away_team_id": away_id, "outcome": outcome})
+    return results
+
+
 def fetch_venue_points_by_kickbase_id(
     league_shortcut: str, season: str, team_name_by_id: Dict[str, str]
 ) -> Tuple[Dict[str, float], Dict[str, float]]:
