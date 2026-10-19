@@ -102,6 +102,16 @@ def map_shortnames_to_kickbase_ids(ppg_by_shortname: Dict[str, float], team_name
     return result
 
 
+def _match_matchday(match: dict) -> Optional[int]:
+    """OpenLigaDB's matchday number for a match (e.g. "1. Spieltag" -> 1),
+    used by metrics/matchup.py to restrict historical data to "everything
+    before matchday N" for the walk-forward backtest (Nutzer-Vorgabe:
+    "ohne Daten zukuenftiger Spieltage") -- None if the API response is
+    missing the group info (degrades gracefully, see callers)."""
+    group = match.get("group") or {}
+    return group.get("groupOrderID")
+
+
 def extract_finished_results(matches: list, team_name_by_id: Dict[str, str]) -> List[dict]:
     """Returns one dict per finished match with real outcome ("home"/"draw"/
     "away"), mapped to Kickbase team_ids -- used by metrics/matchup.py to
@@ -109,7 +119,17 @@ def extract_finished_results(matches: list, team_name_by_id: Dict[str, str]) -> 
     this season, instead of inventing cutoff numbers. Matches that can't be
     mapped to a Kickbase team_id (unmatched shortName, see TEAM_NAME_ALIASES)
     are silently dropped, same degrade-gracefully approach as
-    map_shortnames_to_kickbase_ids above."""
+    map_shortnames_to_kickbase_ids above.
+
+    Also carries "matchday" (OpenLigaDB groupOrderID, may be None for an
+    unexpected API shape) and the real "home_goals"/"away_goals" -- added for
+    the Nutzer-Korrektur "erzielte und kassierte Tore ... in die Prognose
+    einfliessen lassen" (metrics/matchup.py derives a goal-difference-per-
+    venue factor from these) and for the walk-forward backtest (which needs
+    to know EACH result's matchday to exclude anything from/after the
+    matchday being predicted). Purely additive vs. the previous shape
+    (home_team_id/away_team_id/outcome unchanged), so existing callers that
+    only read those three keys are unaffected."""
     name_to_id = {name: tid for tid, name in team_name_by_id.items()}
     results: List[dict] = []
     for m in matches:
@@ -131,7 +151,10 @@ def extract_finished_results(matches: list, team_name_by_id: Dict[str, str]) -> 
             outcome = "away"
         else:
             outcome = "draw"
-        results.append({"home_team_id": home_id, "away_team_id": away_id, "outcome": outcome})
+        results.append({
+            "home_team_id": home_id, "away_team_id": away_id, "outcome": outcome,
+            "matchday": _match_matchday(m), "home_goals": goals1, "away_goals": goals2,
+        })
     return results
 
 
