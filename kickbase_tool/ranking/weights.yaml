@@ -36,7 +36,14 @@
 #   last5_minutes_ratio          Einsatzminuten der letzten 5 Saison-Spieltage,
 #                               als Anteil an den dort maximal moeglichen
 #                               Minuten (siehe metrics/calculations.py::
-#                               compute_last5_minutes)
+#                               compute_last5_minutes). Gewicht seit der
+#                               Nutzer-Vorgabe "Rankings hinsichtlich der
+#                               tatsaechlichen Einsatzminuten optimieren"
+#                               von 8/6/6 auf 18 (Aufstellung) / 12 (Kauf) /
+#                               12 (Verkauf) angehoben -- alle anderen
+#                               Kategorien einer Sektion wurden dafuer
+#                               proportional (Verhaeltnis zueinander
+#                               unveraendert) herunterskaliert.
 #   opponent_remaining_schedule_difficulty
 #                               Restprogramm-Schwierigkeit der naechsten 5
 #                               Gegner (nur Kauf/Verkauf, nicht Aufstellung --
@@ -52,44 +59,44 @@
 # Rankings.
 
 aufstellung:
-  season_avg: 18.4
-  goals: 11.4172
-  assists: 4.4436
-  clean_sheets: 2.5392
-  recent_avg: 8.74
-  team_form: 8.74
-  table_position_diff: 8.74
-  recent_min_max_avg: 4.14
-  points_per_value: 4.14
-  opponent_form: 4.14
-  team_opponent_form_diff: 4.14
-  team_momentum: 4.14
-  own_venue_rank: 4.14
-  opponent_venue_rank: 4.14
-  last5_minutes_ratio: 8.0
+  season_avg: 16.4
+  goals: 10.1762
+  assists: 3.9606
+  clean_sheets: 2.2632
+  recent_avg: 7.79
+  team_form: 7.79
+  table_position_diff: 7.79
+  recent_min_max_avg: 3.69
+  points_per_value: 3.69
+  opponent_form: 3.69
+  team_opponent_form_diff: 3.69
+  team_momentum: 3.69
+  own_venue_rank: 3.69
+  opponent_venue_rank: 3.69
+  last5_minutes_ratio: 18.0
 
 kauf:
-  season_avg: 17.8
-  recent_avg: 17.8
-  points_per_value: 13.35
-  goals: 8.2859
-  assists: 3.2218
-  clean_sheets: 1.8423
-  team_form: 8.9
-  team_momentum: 8.9
-  opponent_form: 4.45
-  own_venue_rank: 4.45
-  last5_minutes_ratio: 6.0
-  opponent_remaining_schedule_difficulty: 5.0
+  season_avg: 16.6638
+  recent_avg: 16.6638
+  points_per_value: 12.4979
+  goals: 7.757
+  assists: 3.0162
+  clean_sheets: 1.7247
+  team_form: 8.3319
+  team_momentum: 8.3319
+  opponent_form: 4.166
+  own_venue_rank: 4.166
+  last5_minutes_ratio: 12.0
+  opponent_remaining_schedule_difficulty: 4.6809
 
 verkauf:
-  season_avg: 31.0197
-  recent_avg: 15.5099
-  points_per_value: 15.5099
-  team_form: 8.8628
-  team_momentum: 8.8628
-  goals: 5.5038
-  assists: 2.1359
-  clean_sheets: 1.5953
-  last5_minutes_ratio: 6.0
-  opponent_remaining_schedule_difficulty: 5.0
+  season_avg: 29.0397
+  recent_avg: 14.5199
+  points_per_value: 14.5199
+  team_form: 8.2971
+  team_momentum: 8.2971
+  goals: 5.1525
+  assists: 1.9996
+  clean_sheets: 1.4935
+  last5_minutes_ratio: 12.0
+  opponent_remaining_schedule_difficulty: 4.6808

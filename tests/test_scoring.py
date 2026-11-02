@@ -1,3 +1,5 @@
+import pytest
+
 from kickbase_tool.data.models import Player
 from kickbase_tool.metrics.calculations import PlayerMetrics
 from kickbase_tool.metrics.fallback import RecentForm
@@ -7,6 +9,7 @@ from kickbase_tool.ranking.scoring import (
     VERKAUF_CATEGORIES,
     compute_kauf_verkauf_ranking,
     compute_ranking,
+    load_weights,
 )
 from kickbase_tool.util import rank_with_ties
 
@@ -170,9 +173,34 @@ def test_compute_kauf_verkauf_ranking_combines_both_with_higher_is_better_scores
 
 def test_last5_minutes_ratio_is_a_ranking_category_in_all_three_rankings():
     # Nutzer-Vorgabe 2026-10-17 (2. Nachricht, Abschnitt 1/2/4): neue
-    # Einsatzminuten-Kategorie in Aufstellung (8%), Kauf (6%) und Verkauf (6%).
+    # Einsatzminuten-Kategorie in Aufstellung (urspruenglich 8%, seit der
+    # spaeteren Nutzer-Vorgabe "Rankings hinsichtlich der tatsaechlichen
+    # Einsatzminuten optimieren" 18%), Kauf (6% -> 12%) und Verkauf (6% -> 12%).
     for cats in (AUFSTELLUNG_CATEGORIES, KAUF_CATEGORIES, VERKAUF_CATEGORIES):
         assert "last5_minutes_ratio" in cats
+
+
+def test_last5_minutes_ratio_weight_was_raised_proportionally_in_weights_yaml():
+    # Nutzer-Vorgabe: last5_minutes_ratio-Gewicht auf 18% (Aufstellung) /
+    # 12% (Kauf) / 12% (Verkauf) der jeweiligen Sektion anheben, alle
+    # anderen Kategorien einer Sektion dafuer proportional (Verhaeltnis
+    # zueinander unveraendert) herunterskalieren, sodass jede Sektion weiter
+    # auf (ca.) 100 aufsummiert.
+    weights = load_weights()
+    targets = {"aufstellung": 18.0, "kauf": 12.0, "verkauf": 12.0}
+    for section, expected_minutes_share in targets.items():
+        section_weights = weights[section]
+        total = sum(section_weights.values())
+        assert total == pytest.approx(100.0, abs=0.01)
+        minutes_share = section_weights["last5_minutes_ratio"] / total * 100.0
+        assert minutes_share == pytest.approx(expected_minutes_share, abs=0.01)
+
+    # Verhaeltnis der uebrigen Kategorien zueinander bleibt erhalten (z.B.
+    # goals:assists:clean_sheets weiterhin ca. 4.5:1.75:1 in Aufstellung).
+    auf = weights["aufstellung"]
+    assert auf["goals"] / auf["assists"] == pytest.approx(11.4172 / 4.4436, rel=1e-4)
+    assert auf["assists"] / auf["clean_sheets"] == pytest.approx(4.4436 / 2.5392, rel=1e-4)
+    assert auf["season_avg"] / auf["recent_avg"] == pytest.approx(18.4 / 8.74, rel=1e-4)
 
 
 def test_opponent_remaining_schedule_difficulty_is_back_in_kauf_and_verkauf_only():

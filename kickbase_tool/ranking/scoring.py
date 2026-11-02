@@ -75,8 +75,10 @@ CATEGORY_DEFINITIONS = {
 # 2026-10-17 -- vorher war market_value/points_per_value komplett aussen vor;
 # jetzt explizit mit 4.5% Gewicht Teil der Aufstellungsbewertung). Einsatz-
 # minuten der letzten 5 Spieltage (last5_minutes_ratio) kamen in der
-# Nutzer-Vorgabe vom selben Tag, 2. Nachricht, dazu (8%/6%/6%); das
-# Restprogramm der naechsten 5 Gegner (opponent_remaining_schedule_difficulty)
+# Nutzer-Vorgabe vom selben Tag, 2. Nachricht, dazu (urspruenglich 8%/6%/6%,
+# seit der spaeteren Nutzer-Vorgabe "Rankings hinsichtlich der tatsaechlichen
+# Einsatzminuten optimieren" auf 18%/12%/12% angehoben, siehe weights.yaml);
+# das Restprogramm der naechsten 5 Gegner (opponent_remaining_schedule_difficulty)
 # kommt in dieser 2. Nachricht nur fuer Kauf/Verkauf zurueck (5% je), nicht
 # fuer Aufstellung -- dort deckt table_position_diff bereits den naechsten
 # einzelnen Gegner ab, waehrend Kauf/Verkauf als mehrwoechige Wertentscheidung
