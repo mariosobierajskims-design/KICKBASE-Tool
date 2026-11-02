@@ -99,6 +99,12 @@ class Player:
     # be preferred wherever a magnitude is needed).
     market_value_trend_direction: Optional[int] = None
     market_value_change_day: Optional[float] = None
+    # Hoechster Marktwert der letzten 365 Tage (Nutzer-Vorgabe 2026-11-02,
+    # Gebotsmodell-Erweiterung "Potenzial-Preis"): aus der marketvalue-Historie
+    # (siehe api/endpoints.py::COMPETITION_PLAYER_MARKETVALUE), NICHT aus dem
+    # aktuellen Marktwert abgeleitet -- bleibt None, wenn die Historie leer
+    # oder komplett 0 ist (z.B. brandneuer Spieler ohne Kickbase-Debuet).
+    season_peak_market_value: Optional[float] = None
 
     @property
     def name(self) -> str:

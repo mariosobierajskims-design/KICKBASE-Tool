@@ -107,6 +107,11 @@ class PlayerMetrics:
     # funktionsfaehig, ohne dass diese Felder dort explizit gesetzt werden muessen.
     start_probability: Optional[int] = None
     market_value_change_day: Optional[float] = None
+    # Pass-through von Player.season_peak_market_value (siehe data/models.py)
+    # fuers "Potenzial-Preis"-Gebotsmodell im Artifact (computeMyMaxBid) --
+    # wie start_probability/market_value_change_day bewusst kein eigenes
+    # Ranking-Kriterium, nur Rohdaten-Durchreichung.
+    season_peak_market_value: Optional[float] = None
 
     # Rohdaten fuer den "effizienter Kurzeinsatz"-Sonderfall im Gebotsmodell
     # (kickbase_tool/bidding/scoring.py::detect_special_cases): echte
@@ -539,6 +544,7 @@ def compute_all_metrics(dataset: Dataset) -> Dict[str, PlayerMetrics]:
             opponent_momentum=opp_momentum,
             start_probability=player.start_probability,
             market_value_change_day=player.market_value_change_day,
+            season_peak_market_value=player.season_peak_market_value,
             season_minutes_total=season_minutes_total,
             season_appearances=season_appearances,
             season_points_total=season_points_total,

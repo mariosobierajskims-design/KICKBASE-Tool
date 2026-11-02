@@ -43,6 +43,13 @@ LEAGUE_ACTIVITIES_FEED = "/v4/leagues/{league_id}/activitiesFeed"
 COMPETITION_PLAYERS = "/v4/competitions/{competition_id}/players"
 COMPETITION_PLAYER_DETAIL = "/v4/competitions/{competition_id}/players/{player_id}"
 COMPETITION_PLAYER_PERFORMANCE = "/v4/competitions/{competition_id}/players/{player_id}/performance"
+# Confirmed live 2026-11-02 (undocumented in the public community docs this
+# file otherwise references): taegliche Marktwert-Historie der letzten 365
+# Tage, Antwort als {"it": [{"dt": <Tage seit 1970-01-01>, "mv": <Wert>}, ...]}.
+# Tage vor dem Kickbase-Debuet des Spielers kommen mit mv=0 zurueck -- siehe
+# data/repository.py fuer die Filterung. Timeframe-Teil des Pfades ist fix
+# "365" (einzig bestaetigter Wert), nicht konfigurierbar.
+COMPETITION_PLAYER_MARKETVALUE = "/v4/competitions/{competition_id}/players/{player_id}/marketvalue/365"
 COMPETITION_TABLE = "/v4/competitions/{competition_id}/table"
 COMPETITION_MATCHDAYS = "/v4/competitions/{competition_id}/matchdays"
 COMPETITION_TEAM_PROFILE = "/v4/competitions/{competition_id}/teams/{team_id}/teamprofile"

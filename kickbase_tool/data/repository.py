@@ -318,6 +318,16 @@ def _fetch_player_details_and_performance(
             except KickbaseAPIError:
                 return {}
 
+        def fetch_marketvalue_history():
+            try:
+                return client.get(
+                    endpoints.COMPETITION_PLAYER_MARKETVALUE.format(
+                        competition_id=settings.competition_id, player_id=player_id
+                    )
+                )
+            except KickbaseAPIError:
+                return {}
+
         detail_raw = cache.get_or_fetch(
             f"player_detail_{player_id}", settings.cache_ttl_volatile_seconds, fetch_detail, force_refresh=force_refresh
         )
@@ -325,6 +335,12 @@ def _fetch_player_details_and_performance(
             f"performance_{player_id}",
             settings.cache_ttl_performance_seconds,
             fetch_performance,
+            force_refresh=force_refresh,
+        )
+        marketvalue_history_raw = cache.get_or_fetch(
+            f"marketvalue_{player_id}",
+            settings.cache_ttl_performance_seconds,
+            fetch_marketvalue_history,
             force_refresh=force_refresh,
         )
 
@@ -345,6 +361,15 @@ def _fetch_player_details_and_performance(
             player.start_probability = roster_extra.get("start_probability")
             player.market_value_trend_direction = roster_extra.get("market_value_trend_direction")
             player.market_value_change_day = roster_extra.get("market_value_change_day")
+
+        # 0-Eintraege vor dem Kickbase-Debuet des Spielers ausfiltern (siehe
+        # endpoints.py::COMPETITION_PLAYER_MARKETVALUE) -- sonst waere "0" der
+        # "hoechste" Wert fuer brandneue Spieler ohne jede Historie.
+        history_values = [
+            entry.get("mv") for entry in (marketvalue_history_raw or {}).get("it", []) if entry.get("mv")
+        ]
+        if history_values:
+            player.season_peak_market_value = max(history_values)
         return player
 
     players: List[Player] = []

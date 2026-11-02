@@ -162,6 +162,11 @@ def build_rows(argv=None) -> tuple:
             "recent_min": pm.recent_form.minimum,
             "recent_max": pm.recent_form.maximum,
             "market_value": pm.market_value,
+            # Hoechster Marktwert der letzten 365 Tage (Nutzer-Vorgabe
+            # 2026-11-02): Grundlage fuer den "Potenzial-Preis"-Aufschlag im
+            # Gebotsmodell (siehe computeMyMaxBid im Artifact), NICHT selbst
+            # eine Ranking-Kennzahl.
+            "season_peak_market_value": pm.season_peak_market_value,
             "points_per_value": pm.points_per_market_value,
             "season_minutes_total": pm.season_minutes_total,
             "season_appearances": pm.season_appearances,
