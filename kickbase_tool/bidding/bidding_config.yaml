@@ -166,7 +166,27 @@ similar_transfers_max_k: 20
 # kontinuierliche Kurve (explizite Nutzervorgabe: "keine starren Stufen,
 # sondern Halbwertszeit"). Bei 30 Tagen hat ein 30 Tage alter Transfer noch
 # 50% Gewicht, ein 60 Tage alter noch 25%, usw.
-recency_half_life_days: 30.0
+# Von 30.0 auf 20.0 gesenkt (Nutzer-Feedback 4.11.: "juengste Transfers
+# sollen schneller mit reingezaehlt werden"). NICHT weiter heruntergesetzt:
+# overall_market_factor() vergleicht den (decay-gewichteten) Median der
+# letzten 7 Tage gegen den (ebenfalls decay-gewichteten) Median ueber den
+# GESAMTEN Log -- bei einer Halbwertszeit unter ca. 18 Tagen verschwindet
+# dieser Kontrast, weil die juengsten Tage dann auch den "Gesamt"-Median
+# dominieren und shift_pct auf 0 zusammenfaellt (siehe
+# tests/test_calibration.py::test_overall_market_factor_shift_is_capped,
+# empirisch mit mehreren Werten durchgetestet: 17.0 bricht die Erkennung,
+# 17.5+ funktioniert, 20.0 mit komfortablem Sicherheitsabstand gewaehlt).
+# 20 Tage sind trotzdem deutlich reaktionsschneller als vorher: ein 7 Tage
+# alter Transfer hat jetzt ~78% statt ~85% Gewicht, ein 14 Tage alter ~59%
+# statt ~71%.
+# WICHTIG fuer Fuellkrug/Olise/Nusa (Ausgangsbeispiel): deren Problem war
+# NICHT eine zu langsame Decay-Kurve, sondern n_fresh=0 (ALLE aehnlichen
+# Vergleichstransfers sind "backfilled", siehe pricing._empirical_estimate/
+# w_empirical) -- das ist ein reines Datenverfuegbarkeits-Gate (0 oder >0),
+# keine Geschwindigkeitsfrage, und wird durch diesen Wert NICHT veraendert.
+# Fuer genau diese drei Spieler wirkt stattdessen ausschliesslich der
+# market_factor_max_shift_pct-Hebel oben.
+recency_half_life_days: 20.0
 
 # Wenn ein Transfer laut Activity-Feed OHNE Konkurrenzgebot ("coc"/bid_count
 # == 0) gewonnen wurde, ist der gezahlte Preis eher ein unkontrollierter
@@ -204,7 +224,14 @@ backfilled_weight_factor: 0.6
 
 # Wie stark der Liga-Markt-Faktor (aktuelle Liga-weite Preisaggressivitaet)
 # den finalen Overpay zusaetzlich verschieben darf (Prozentpunkte, gedeckelt).
-market_factor_max_shift_pct: 4.0
+# Von 4.0 auf 10.0 angehoben (Nutzer-Feedback 4.11.: bei Füllkrug/Olise/Nusa
+# zeigte der Faktor zwar korrekt "aktuell aggressiv", durfte das Gebot aber
+# nur um max. 4 Punkte anheben -- zu wenig, um die Spieler tatsaechlich zu
+# bekommen). Bleibt bewusst eine Deckelung (kein unbegrenztes Overpay) und
+# wird weiterhin nur aktiv, wenn der echte 7-Tage- vs. Gesamt-Median-Unterschied
+# (overall_market_factor) das auch tatsaechlich rechtfertigt -- kein starrer
+# Bonus, sondern weiterhin "spiegelt den echten Markt, nur mit mehr Spielraum".
+market_factor_max_shift_pct: 10.0
 
 # Wie stark ein stark beschleunigender MW-Trend den Overpay INNERHALB der
 # Kategorie nach oben ziehen darf (Prozentpunkte, gedeckelt) -- soll
