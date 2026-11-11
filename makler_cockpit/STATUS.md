@@ -12,9 +12,18 @@
 - **Python 3.12 + FastAPI**, Seiten serverseitig mit Jinja2 + HTMX (kein JavaScript-Build, responsiv per CSS)
 - **SQLite** (eine Datei: Flyer, Tracker, Parkplatz, Queue, Vorlagen, Protokoll). Backup = Datei kopieren
 - **APScheduler** in der App für die Jobs (9:30, Mo/Do, Di, Vortag 15:45, Fr 15:00)
-- **Docker Compose + Caddy**: Start mit einem Befehl, HTTPS automatisch über Let's Encrypt
-- Update: `git pull && docker compose up -d --build` · Backup: nächtlicher SQLite-Export + Hoster-Snapshots
+- **Docker Compose** auf dem Büro-NAS (Synology Container Manager), Zugriff und HTTPS über **Tailscale**
+- Update: `git pull && docker compose up -d --build` · Backup: nächtlicher SQLite-Export in einen NAS-Ordner + NAS-Backup (Hyper Backup)
 
-### Offen (Antworten nötig)
+### Entschieden
+- Mail: Postfach bei onOffice → Briefing per onOffice-sendmail nur an mich **oder** SMTP (beim onOffice-Support erfragen)
+- Hosting: NAS im Büro + Tailscale
+- Neues eigenes Repo
+- Login: nur ein Nutzer
 
-Siehe Fragen in der Antwort des Assistenten.
+### Offen
+- NAS-Modell / Docker-fähig?
+- API-Modul gebucht? API-Benutzer angelegt?
+- Briefing-Versand: Weg A (onOffice-API) oder B (SMTP)?
+- Name des neuen Repos
+- Freigabe Chef / Datenschutz

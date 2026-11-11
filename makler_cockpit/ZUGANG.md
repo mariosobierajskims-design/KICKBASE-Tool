@@ -12,11 +12,11 @@ P4 = Versand nach Freigabe · P5 = Auto-Versand
 
 | # | Zugang | Wofür | Kosten (ca.) | Pflicht ab |
 |---|---|---|---|---|
-| 1 | Server (24/7-Hosting) | App + Hintergrund-Jobs laufen rund um die Uhr | 5–10 €/Monat | P1 |
-| 2 | Domain/Subdomain + HTTPS | Aufruf per `https://cockpit.…` an PC und Handy | 0 € (Subdomain) | P1 |
+| 1 | NAS im Büro (24/7) | App + Hintergrund-Jobs laufen rund um die Uhr | 0 € (vorhandenes NAS) | P1 |
+| 2 | Fernzugriff + HTTPS (Tailscale) | Aufruf von PC und Handy, auch unterwegs | 0 € | P1 |
 | 3 | App-Login | Schutz der App | 0 € | P1 |
 | 4 | onOffice API-Benutzer | Kontakte/Objekte/Aktivitäten lesen und schreiben | API-Modul: bei onOffice erfragen | P2 (lesen), P3 (schreiben) |
-| 5 | Mail für Briefing an dich | Morgen-Mail um 9:30, Fehlermeldungen | 0 € (bestehendes Postfach) | P2 |
+| 5 | Mail für Briefing an dich (onOffice-Mail) | Morgen-Mail um 9:30, Fehlermeldungen | 0 € | P2 |
 | 6 | Mail-Postfach lesen (IMAP/Graph) | Suchauftrags-Mails → Lead-Entwürfe | 0 € | optional (P5) |
 | 7 | Anthropic API-Key (KI) | Diktat → MPE-Schema, Mail-Entwürfe | ca. 10–25 €/Monat | P3 |
 | 8 | Freigaben Chef / Datenschutz | Erlaubnis für Kundendaten auf Server + KI | 0 € | **vor P2** |
@@ -37,7 +37,14 @@ Dein PC kann dafür nicht genutzt werden, weil er nicht rund um die Uhr an ist.
 | NAS im Büro (Synology mit Docker) | 0 € laufend, falls vorhanden | Daten bleiben im Büro | Strom/Internet im Büro müssen stabil sein, HTTPS von außen ist aufwendiger |
 | Eigener PC / Laptop | 0 € | – | nicht 24/7, **nicht geeignet** |
 
-**Wo bekommen (Hetzner):**
+**Entscheidung: NAS im Büro.** Voraussetzungen, bitte prüfen (Wen fragen: wer das NAS eingerichtet hat):
+- [ ] Modell und Hersteller? (z.B. Synology DS224+) Es muss **Docker** können: bei Synology das Paket „Container Manager“, meist nur auf „+“-Modellen mit Intel/AMD-CPU
+- [ ] mindestens 2 GB RAM frei
+- [ ] Admin-Zugang zum NAS (DSM-Oberfläche) oder eine Person, die ihn hat
+- [ ] NAS und Internet im Büro laufen nachts und am Wochenende durch (sonst fallen Jobs aus, z.B. das Briefing um 9:30 nach Stromausfall)
+- [ ] Backup des NAS vorhanden (z.B. Hyper Backup auf USB-Platte oder Cloud). Die App-Datenbank wird zusätzlich nachts in einen NAS-Ordner exportiert.
+
+**Alternativ (falls das NAS kein Docker kann), Hetzner:**
 1. Auf hetzner.com/cloud registrieren. Das sollte die Firma machen (LebensWERT GmbH als Kunde, Firmen-Kreditkarte oder SEPA).
 2. In der Cloud Console: Projekt „Makler-Cockpit“ anlegen → „Server hinzufügen“ → Standort Deutschland,
    Image **Ubuntu 24.04**, kleinste Größe (2 vCPU / 4 GB RAM), Häkchen bei **Backups**.
@@ -45,18 +52,21 @@ Dein PC kann dafür nicht genutzt werden, weil er nicht rund um die Uhr an ist.
 
 **Übergabe:** Die Server-IP schickst du mir. Den Zugang zum Server (SSH-Schlüssel) richten wir zusammen ein, ohne Passwort im Chat.
 
-## 2. Domain/Subdomain + HTTPS
+## 2. Fernzugriff + HTTPS (Tailscale, Empfehlung beim NAS)
 
-**Was:** eine Adresse wie `cockpit.lebenswert-….de`. Darüber kommt das HTTPS-Zertifikat (das Schloss im Browser).
-Ohne HTTPS gibt es kein Login und keine Handy-Nutzung.
+**Was:** sicherer Zugriff auf die App von PC und Handy, auch außerhalb des Büros, **ohne** das NAS ins offene Internet
+zu stellen und ohne Portfreigabe am Router. Tailscale baut ein privates Netz zwischen deinen Geräten auf und
+liefert ein HTTPS-Zertifikat für eine Adresse wie `https://nas.<name>.ts.net`.
 
-**Wo bekommen:** Wer verwaltet eure Website-Domain? (Webagentur, IONOS, Strato …) Diese Stelle bitten:
-> „Bitte einen DNS-Eintrag anlegen: Typ **A**, Name **cockpit**, Ziel **<Server-IP>**.“
+**Wo bekommen:**
+1. Auf tailscale.com mit einem Firmen-Konto anmelden. Der kostenlose Plan reicht für wenige Nutzer und Geräte.
+2. Tailscale auf dem NAS installieren (Synology: Paket-Zentrum → „Tailscale“), auf deinem PC und auf dem Handy (App Store / Play Store).
+3. In der Tailscale-Verwaltung **MagicDNS** und **HTTPS-Zertifikate** einschalten.
 
-**Kosten:** 0 € für eine Subdomain einer bestehenden Domain. Eine neue Domain kostet ca. 1–15 €/Jahr.
-Das HTTPS-Zertifikat ist kostenlos (Let's Encrypt) und erneuert sich automatisch.
+**Kosten:** 0 €.
+**Übergabe:** `.env` → `APP_DOMAIN=<nas-name>.<tailnet>.ts.net`
 
-**Übergabe:** `.env` → `APP_DOMAIN=cockpit.…`
+*Alternative:* Synology-DDNS + Let's Encrypt + Portfreigabe 443. Davon rate ich ab, weil die App dann im offenen Internet steht.
 
 ## 3. App-Login
 
@@ -92,28 +102,26 @@ onOffice-Ansprechpartner (Vertrieb) nach Preis fragen.
 **Gut zu wissen:** Kunden-Mails sollen über onOffice verschickt werden. Dann landen sie automatisch im Maklerbuch,
 und Makros wie `_agreementLink` funktionieren. Ein eigener Mailserver wird dafür nicht gebraucht.
 
-## 5. Mail für das Briefing an dich
+## 5. Mail für das Briefing an dich (Postfach bei onOffice)
 
 **Was:** Die App schickt dir um 9:30 das Briefing und meldet Fehler. Die Mail geht nur an dich, nie an Kunden.
 
-**Wen fragen:** Wer stellt eure E-Mail bereit? Woran du es erkennst:
+Euer Postfach liegt bei onOffice. Es gibt zwei Wege:
 
-| Wenn ihr nutzt … | Dann | Was der Admin tun muss |
+| Weg | Was nötig ist | Bewertung |
 |---|---|---|
-| **Microsoft 365 / Outlook (Exchange Online)** | **Microsoft Graph** (empfohlen; der klassische SMTP-Login mit Passwort wird von Microsoft abgeschaltet) | entra.microsoft.com → App-Registrierungen → Neue Registrierung „Makler-Cockpit“ → API-Berechtigungen → Microsoft Graph → *Anwendungsberechtigungen* `Mail.Send` (und `Mail.Read`, falls Punkt 6) → Administratorzustimmung erteilen → Zertifikate & Geheimnisse → neuer geheimer Clientschlüssel. Zugriff in Exchange auf **dein** Postfach beschränken (RBAC for Applications). |
-| IONOS, Strato, Google Workspace, sonstige | **SMTP** (Versand) / **IMAP** (Lesen) | SMTP-/IMAP-Server und Port nachsehen, möglichst ein **App-Passwort** statt des normalen Passworts anlegen |
+| **A: Versand über die onOffice-API** (`sendmail`, Empfänger fest = deine Adresse) | Dem API-Benutzer eine E-Mail-Identität zuweisen (siehe Punkt 4) | Kein zusätzliches Passwort. Technisch ist das aber ein schreibender API-Aufruf; ich würde ihn ab P2 **nur für Mails an dich** freischalten. |
+| **B: SMTP/IMAP des onOffice-Postfachs** | Beim **onOffice-Support** fragen: „Bieten Sie SMTP/IMAP-Zugang für unsere Postfächer? Server, Port, Verschlüsselung, Benutzername?“ | Funktioniert unabhängig von der API. Wird außerdem für Punkt 6 (Postfach lesen) gebraucht. |
 
 **Kosten:** 0 €.
-**Übergabe:**
-- Graph: `.env` → `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MAIL_TO`
-- SMTP: `.env` → `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `MAIL_TO`
+**Übergabe:** A: `ONOFFICE_EMAIL_IDENTITY`, `MAIL_TO` · B: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `MAIL_TO` (für Punkt 6 zusätzlich `IMAP_HOST`, `IMAP_PORT`)
 
 ## 6. Postfach lesen (optional, Suchauftrags-Mails)
 
 **Was:** Die App liest einen **eigenen Ordner** (z.B. „Suchaufträge“), in den die Portal-Benachrichtigungen per Regel
 einsortiert werden. Daraus macht sie Lead-Entwürfe und filtert Anzeigen mit „keine Makler“ heraus.
 **Kein Scraping**: Portale werden nicht direkt abgefragt. Nachrichten verschickst du immer selbst.
-**Wo/Übergabe:** wie Punkt 5 (Graph `Mail.Read` bzw. IMAP-Zugang), plus `.env` → `IMAP_FOLDER=Suchaufträge`.
+**Wo/Übergabe:** IMAP-Zugang wie Punkt 5 Weg B (beim onOffice-Support erfragen), plus `.env` → `IMAP_FOLDER=Suchaufträge`.
 **Pflicht:** nein, optional.
 
 ## 7. Anthropic API-Key (KI)
@@ -138,7 +146,7 @@ Das Ausgabenlimit verhindert Überraschungen.
 Ich kann keine Rechtsberatung geben. Diese Punkte sollten Chef und, falls vorhanden, Datenschutzbeauftragter abhaken:
 
 - [ ] **Chef einverstanden**, dass ein Tool per API mit onOffice arbeitet (Lesen ab P2, Schreiben ab P3, Versand ab P4)
-- [ ] **AV-Vertrag mit dem Hoster** (Hetzner: per Klick in der Console)
+- [ ] **Hosting auf dem eigenen NAS:** kein externer Hoster nötig. Tailscale überträgt nur verschlüsselt und speichert keine App-Daten; trotzdem prüfen, ob ein AV-Vertrag nötig ist
 - [ ] **KI-Anbieter (Anthropic, USA):** Datenverarbeitungsvertrag (DPA mit Standardvertragsklauseln) akzeptiert?
       Dürfen Diktate mit Eigentümerdaten dorthin? Alternative: Namen und Telefonnummern vor dem KI-Aufruf entfernen.
 - [ ] **onOffice:** erlaubt euer Vertrag die API-Nutzung durch ein selbst betriebenes Tool? (normalerweise ja)
