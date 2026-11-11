@@ -1,0 +1,105 @@
+[
+ {
+  "id": 101,
+  "type": "address",
+  "elements": {
+   "Vorname": "Anna",
+   "Name": "Albers",
+   "defaultphone": "0211 111111",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 102,
+  "type": "address",
+  "elements": {
+   "Vorname": "Bernd",
+   "Name": "Becker",
+   "defaultphone": "0211 222222",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 103,
+  "type": "address",
+  "elements": {
+   "Vorname": "Clara",
+   "Name": "Claasen",
+   "defaultphone": "0211 333333",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 104,
+  "type": "address",
+  "elements": {
+   "Vorname": "Dieter",
+   "Name": "Dahl",
+   "defaultphone": "0211 444444",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 201,
+  "type": "address",
+  "elements": {
+   "Vorname": "Eva",
+   "Name": "Ebert",
+   "defaultphone": "0211 555555",
+   "Merkmal_test": "|mpe_kontakt|",
+   "letzter_Kontakt": "2026-08-01 10:00:00"
+  }
+ },
+ {
+  "id": 202,
+  "type": "address",
+  "elements": {
+   "Vorname": "Frank",
+   "Name": "Fuchs",
+   "defaultphone": "0211 666666",
+   "Merkmal_test": "|eigentuemer_lead|",
+   "letzter_Kontakt": "2026-10-30 10:00:00"
+  }
+ },
+ {
+  "id": 203,
+  "type": "address",
+  "elements": {
+   "Vorname": "Greta",
+   "Name": "Gruber",
+   "defaultphone": "0211 777777",
+   "Merkmal_test": "|mpe_kontakt|",
+   "letzter_Kontakt": "2026-09-01 09:00:00"
+  }
+ },
+ {
+  "id": 301,
+  "type": "address",
+  "elements": {
+   "Vorname": "Hans",
+   "Name": "Hoff",
+   "defaultphone": "0211 888888",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 302,
+  "type": "address",
+  "elements": {
+   "Vorname": "Ina",
+   "Name": "Imhof",
+   "defaultphone": "0211 999999",
+   "Merkmal_test": ""
+  }
+ },
+ {
+  "id": 303,
+  "type": "address",
+  "elements": {
+   "Vorname": "Jan",
+   "Name": "Jung",
+   "defaultphone": "0211 101010",
+   "Merkmal_test": ""
+  }
+ }
+]

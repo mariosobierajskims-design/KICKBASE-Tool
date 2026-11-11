@@ -1,0 +1,144 @@
+# =====================================================================
+# Konfiguration CRM-Automatisierung (LebensWERT GmbH)
+# Alles hier ist editierbar. Keine Secrets in dieser Datei (-> .env).
+#
+# Aktionsarten: deutsche Namen EXAKT wie in onOffice unter
+#   Extras > Einstellungen > Administration > Aktionsarten
+# Prüfen gegen das Live-System:  python main.py konfig-pruefen
+#
+# Ein Eintrag ist entweder
+#   schluessel: "Aktionsart"                         (alle Aktionstypen)
+# oder
+#   schluessel: {aktionsart: "Email", aktionstyp: "Ausgang"}
+# oder null  (=> der Abschnitt im Briefing meldet "nicht konfiguriert")
+# Mehrere Varianten zählen gemeinsam: Liste der obigen Formen.
+#
+# !! Die Werte unten sind PLATZHALTER und müssen gegen eure Liste
+# !! geprüft werden (konfig-pruefen zeigt alle vorhandenen Namen).
+# =====================================================================
+
+zeitzone: Europe/Berlin
+
+aktionsarten:
+  besichtigung: "Besichtigung"
+  mpe: "MPE"
+  kaltakquise: "Kaltakquise"
+  erstgespraech: "Erstgespräch"
+  absage_spaeter: "Absage später"
+  agreement_bestaetigt: "Agreement bestätigt"
+  expose_versendet: "Exposéversand"
+  unterlagen_angefragt: "Unterlagen angefragt"
+  uebergabe: "Übergabe"
+  # zusätzlich benötigt (Briefing/Wochenbericht):
+  portal_anfrage: "Anfrage"            # wie kommen Portalanfragen ins Maklerbuch? (z.B. {aktionsart: "Email", aktionstyp: "Eingang"})
+  nachfass: "Nachfass"
+  eigentuemertermin: "Eigentümertermin"
+  neuer_auftrag: "Auftrag"
+  stufe1_erinnerung: null              # Aktivität, mit der eine Stufe-1-Erinnerung protokolliert wird (optional)
+
+# Merkmale von Adressen (Multiselect-Feld). Feldname + gespeicherter Wert.
+# Feldname/Werte über `python main.py konfig-pruefen` ermitteln (zeigt Multiselect-Felder des Adressmoduls).
+adresse:
+  merkmal_feld: null                   # TODO: z.B. "ArtDaten" o.ä. -- NICHT geraten, bitte prüfen
+  letzter_kontakt_feld: "letzter_Kontakt"   # lt. API-Doku (Adress-Filterbeispiel)
+  telefon_felder: ["defaultphone"]     # virtuelle Felder lt. Doku: phone, mobile, defaultphone
+  name_felder: ["Vorname", "Name"]
+
+merkmale:
+  eigentuemer_lead: "eigentuemer_lead" # TODO: interner Wert lt. konfig-pruefen (z.B. "indMulti...Select...")
+  mpe_kontakt: "mpe_kontakt"
+  netzwerk: "netzwerk"
+  keine_automatik: "keine_automatik"
+
+intervalle:
+  kaltakquise: [10, 30, 90]
+  mpe: [14, 56, 180]
+  spaeter: [90, 180, 365]
+  stufe1_erinnerung_ab_tagen: 2
+  stufe1_max: 2
+  objekt_laufzeit_warnung: 42
+  mpe_monatscheck_tage: 56
+
+# Kalender (Get Appointments / appointmentList). Typ wird gegen type.value ODER type.label verglichen.
+termine:
+  besichtigung_typen: ["Besichtigung"]
+  vorschau_tage_besichtigung: 7        # "Objekte ohne Besichtigung nächste X Tage"
+  vorschau_tage_naechster_schritt: 90  # Termine in diesem Horizont zählen als "nächster Schritt"
+  besichtigungszeiten:                 # Info / spätere Phasen (Besichtigungsbestätigung)
+    di: ["16:00", "19:00"]
+    do: ["16:00", "19:00"]
+    sa: null                           # optional, z.B. ["10:00", "13:00"]
+
+# Objekte (Read Estate). Filter werden 1:1 an onOffice übergeben (Doku-Format {feld: [{op, val}]}).
+objekte:
+  titel_feld: "objekttitel"
+  nummer_feld: "objektnr_extern"
+  vermarktung_filter:
+    status: [{op: "=", val: 1}]
+    verkauft: [{op: "=", val: 0}]
+    reserviert: [{op: "=", val: 0}]
+  reserviert_filter:
+    status: [{op: "=", val: 1}]
+    reserviert: [{op: "=", val: 1}]
+    verkauft: [{op: "=", val: 0}]
+  reserviert_zusatzfelder: []          # z.B. Feld für Kaufprozess-Status (Name lt. konfig-pruefen)
+  vermarktungsbeginn_feld: null        # TODO: Feld für Laufzeit-Beginn (z.B. Vermarktungsstart / Anlagedatum)
+
+# Aufgaben (Read Tasks) = Wiedervorlagen
+aufgaben:
+  erledigt_status: []                  # Status-Werte, die als erledigt gelten (zusätzlich Feld "erledigt")
+
+# Portal-Anfragen / Stufen
+anfragen:
+  stufe1_lookback_tage: 30             # wie weit zurück offene Stufe-1-Anfragen gesucht werden
+  agreement_lookback_tage: 365
+
+# Antwort-Aktivitäten: zählen als "Kontakt hat reagiert" (Kaltakquise ohne Antwort)
+antwort_aktionsarten: [erstgespraech, mpe, absage_spaeter, eigentuemertermin, neuer_auftrag]
+
+ohne_naechsten_schritt:
+  merkmale: [mpe_kontakt, eigentuemer_lead]
+
+briefing:
+  max_eintraege: 15                    # pro Abschnitt, Rest als "+ X weitere"
+  notiz_max_zeichen: 160
+  letzte_aktivitaeten: 3
+  taeglich_zuerst: false               # true = "heute anrufen"/Termine vor dem Wochentags-Stapel
+
+# Abschnitte je Wochentag (Reihenfolge = Reihenfolge in der Mail)
+wochentage:
+  mo: [besichtigungen_rueckblick, stufe1_offen]
+  di: [mpe_faellig, kaltakquise_ohne_antwort, mpe_monatscheck]
+  mi: [objekte_aktivitaet, objekte_laufzeit]
+  do: [besichtigungen_rueckblick, stufe1_runde2, objekte_reserviert]
+  fr: [wochenzahlen]
+taeglich: [portal_anfragen_neu, termine_heute_morgen, objekte_ohne_besichtigung, ohne_naechsten_schritt]
+
+# Besichtigungs-Rückblick: Mo -> letzter Do + Sa, Do -> letzter Di
+besichtigung_rueckblick:
+  mo: [do, sa]
+  do: [di]
+
+wochenbericht:
+  zaehler:
+    Kaltakquise: [kaltakquise]
+    Nachfass: [nachfass]
+    Besichtigungen: [besichtigung]
+    MPEs: [mpe]
+    Eigentümertermine: [eigentuemertermin]
+    Neue Aufträge: [neuer_auftrag]
+    Portal-Anfragen: [portal_anfrage]
+    Exposés: [expose_versendet]
+
+# Sicherungen für spätere Versand-Module (Phase 2/3) -- jetzt schon konfiguriert
+sicherungen:
+  agreement_pflicht_fuer: [3d_link, expose, unterlagen]
+  min_tage_zwischen_automails: 3
+  protokoll_aktionsart: {aktionsart: "Email", aktionstyp: "Ausgang"}  # agentslog-Eintrag je Versand (prüfen)
+
+api:
+  timeout_s: 30
+  max_retries: 3
+  min_abstand_s: 0.4                   # Mindestabstand zwischen Requests (Rate-Limit, Doku nennt keins)
+  seitengroesse: 500                   # max. listlimit lt. Doku
+  max_datensaetze: 5000                # Schutz gegen Endlos-Paginierung

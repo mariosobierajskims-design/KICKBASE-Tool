@@ -1,0 +1,150 @@
+[
+ {
+  "id": 1,
+  "type": "calendar",
+  "elements": {
+   "id": "1",
+   "subject": "",
+   "type": {
+    "value": "Besichtigung",
+    "label": "Besichtigung"
+   },
+   "status": {
+    "value": "active",
+    "label": "active"
+   },
+   "date": {
+    "start": "2026-11-05T16:00:00+00:00",
+    "end": "2026-11-05T16:00:00+00:00",
+    "allDay": false
+   },
+   "contacts": [
+    {
+     "id": "102",
+     "confirmationStatus": "not-set"
+    }
+   ],
+   "estate": {
+    "id": "501"
+   }
+  }
+ },
+ {
+  "id": 2,
+  "type": "calendar",
+  "elements": {
+   "id": "2",
+   "subject": "",
+   "type": {
+    "value": "Besichtigung",
+    "label": "Besichtigung"
+   },
+   "status": {
+    "value": "active",
+    "label": "active"
+   },
+   "date": {
+    "start": "2026-11-07T10:00:00+00:00",
+    "end": "2026-11-07T10:00:00+00:00",
+    "allDay": false
+   },
+   "contacts": [
+    {
+     "id": "101",
+     "confirmationStatus": "not-set"
+    }
+   ],
+   "estate": {
+    "id": "502"
+   }
+  }
+ },
+ {
+  "id": 3,
+  "type": "calendar",
+  "elements": {
+   "id": "3",
+   "subject": "Bewertung besprechen",
+   "type": {
+    "value": "Eigentümertermin",
+    "label": "Eigentümertermin"
+   },
+   "status": {
+    "value": "active",
+    "label": "active"
+   },
+   "date": {
+    "start": "2026-11-09T15:00:00+00:00",
+    "end": "2026-11-09T15:00:00+00:00",
+    "allDay": false
+   },
+   "contacts": [
+    {
+     "id": "201",
+     "confirmationStatus": "not-set"
+    }
+   ],
+   "estate": {}
+  }
+ },
+ {
+  "id": 4,
+  "type": "calendar",
+  "elements": {
+   "id": "4",
+   "subject": "",
+   "type": {
+    "value": "Besichtigung",
+    "label": "Besichtigung"
+   },
+   "status": {
+    "value": "active",
+    "label": "active"
+   },
+   "date": {
+    "start": "2026-11-12T16:00:00+00:00",
+    "end": "2026-11-12T16:00:00+00:00",
+    "allDay": false
+   },
+   "contacts": [
+    {
+     "id": "104",
+     "confirmationStatus": "not-set"
+    }
+   ],
+   "estate": {
+    "id": "501"
+   }
+  }
+ },
+ {
+  "id": 5,
+  "type": "calendar",
+  "elements": {
+   "id": "5",
+   "subject": "",
+   "type": {
+    "value": "Besichtigung",
+    "label": "Besichtigung"
+   },
+   "status": {
+    "value": "active",
+    "label": "active"
+   },
+   "date": {
+    "start": "2026-11-03T16:00:00+00:00",
+    "end": "2026-11-03T16:00:00+00:00",
+    "allDay": false
+   },
+   "contacts": [
+    {
+     "id": "101",
+     "confirmationStatus": "not-set"
+    }
+   ],
+   "estate": {
+    "id": "501"
+   }
+  }
+ }
+]

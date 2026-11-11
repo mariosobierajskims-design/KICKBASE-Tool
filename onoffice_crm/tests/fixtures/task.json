@@ -1,0 +1,28 @@
+[
+ {
+  "id": 700,
+  "type": "task",
+  "elements": {
+   "Betreff": "Wiedervorlage Preis",
+   "Deadline": "2026-11-20 00:00:00",
+   "Status": "offen",
+   "erledigt": "0",
+   "relatedAddressId": [
+    "202"
+   ]
+  }
+ },
+ {
+  "id": 701,
+  "type": "task",
+  "elements": {
+   "Betreff": "Alt",
+   "Deadline": "2026-10-01 00:00:00",
+   "Status": "offen",
+   "erledigt": "0",
+   "relatedAddressId": [
+    "203"
+   ]
+  }
+ }
+]

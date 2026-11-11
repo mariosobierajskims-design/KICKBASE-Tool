@@ -1,0 +1,95 @@
+[
+ {
+  "id": "0",
+  "type": "actionkind",
+  "elements": {
+   "key": "Anfrage",
+   "label": "Anfrage",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "1",
+  "type": "actionkind",
+  "elements": {
+   "key": "Agreement bestätigt",
+   "label": "Agreement bestätigt",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "2",
+  "type": "actionkind",
+  "elements": {
+   "key": "MPE",
+   "label": "MPE",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "3",
+  "type": "actionkind",
+  "elements": {
+   "key": "Nachfass",
+   "label": "Nachfass",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "4",
+  "type": "actionkind",
+  "elements": {
+   "key": "Kaltakquise",
+   "label": "Kaltakquise",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "5",
+  "type": "actionkind",
+  "elements": {
+   "key": "Erstgespräch",
+   "label": "Erstgespräch",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "6",
+  "type": "actionkind",
+  "elements": {
+   "key": "Besichtigung",
+   "label": "Besichtigung",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "7",
+  "type": "actionkind",
+  "elements": {
+   "key": "Exposéversand",
+   "label": "Exposéversand",
+   "types": {},
+   "default": ""
+  }
+ },
+ {
+  "id": "8",
+  "type": "actionkind",
+  "elements": {
+   "key": "Email",
+   "label": "Email",
+   "types": {
+    "Eingang": "Eingang",
+    "Ausgang": "Ausgang"
+   },
+   "default": ""
+  }
+ }
+]

@@ -1,0 +1,25 @@
+{% extends "_base.html" %}
+{% block inhalt %}
+<div style="font-size:13px;color:#4b5563;margin-top:12px;">KW {{ z.kw }} · {{ z.von.strftime('%d.%m.') }}–{{ z.bis.strftime('%d.%m.%Y') }} (Mo–Fr) vs. Vorwoche</div>
+{% if hinweis %}
+<div style="font-size:12px;color:#92400e;background:#fef3c7;border-radius:4px;padding:6px 8px;margin-top:6px;">⚠ {{ hinweis }}</div>
+{% endif %}
+<table role="presentation" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:14px;">
+  <tr style="color:#6b7280;font-size:12px;text-align:left;">
+    <th style="padding:6px 4px;border-bottom:2px solid #e5e7eb;">Kennzahl</th>
+    <th style="padding:6px 4px;border-bottom:2px solid #e5e7eb;text-align:right;">Woche</th>
+    <th style="padding:6px 4px;border-bottom:2px solid #e5e7eb;text-align:right;">Vorw.</th>
+    <th style="padding:6px 4px;border-bottom:2px solid #e5e7eb;text-align:right;">Δ</th>
+  </tr>
+  {% for zl in z.zeilen %}
+  <tr>
+    <td style="padding:6px 4px;border-bottom:1px solid #f3f4f6;">{{ zl.name }}</td>
+    <td style="padding:6px 4px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:600;">{{ zl.aktuell }}</td>
+    <td style="padding:6px 4px;border-bottom:1px solid #f3f4f6;text-align:right;color:#6b7280;">{{ zl.vorwoche }}</td>
+    <td style="padding:6px 4px;border-bottom:1px solid #f3f4f6;text-align:right;color:{{ '#047857' if zl.diff > 0 else ('#b91c1c' if zl.diff < 0 else '#6b7280') }};">{{ zl.diff_text }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<div style="font-size:15px;font-weight:600;margin-top:18px;">Entwurf für den Chef</div>
+<div style="font-size:14px;line-height:1.5;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-top:6px;">{{ entwurf }}</div>
+{% endblock %}

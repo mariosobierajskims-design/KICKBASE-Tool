@@ -1,0 +1,32 @@
+[
+ {
+  "id": "address",
+  "type": "",
+  "elements": {
+   "Merkmal_test": {
+    "type": "multiselect",
+    "label": "Merkmal",
+    "permittedvalues": {
+     "mpe_kontakt": "MPE-Kontakt",
+     "eigentuemer_lead": "Eigentümer-Lead",
+     "netzwerk": "Netzwerk",
+     "keine_automatik": "Keine Automatik"
+    }
+   },
+   "Name": {
+    "type": "varchar",
+    "label": "Name"
+   }
+  }
+ },
+ {
+  "id": "estate",
+  "type": "",
+  "elements": {
+   "vermarktungsstart": {
+    "type": "date",
+    "label": "Vermarktungsstart"
+   }
+  }
+ }
+]

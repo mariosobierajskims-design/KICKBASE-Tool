@@ -1,0 +1,38 @@
+[
+ {
+  "id": 501,
+  "type": "estate",
+  "elements": {
+   "objekttitel": "Altbauwohnung Oberkassel",
+   "objektnr_extern": "W-501",
+   "status": 1,
+   "verkauft": 0,
+   "reserviert": 0,
+   "vermarktungsstart": "2026-09-01"
+  }
+ },
+ {
+  "id": 502,
+  "type": "estate",
+  "elements": {
+   "objekttitel": "EFH Gerresheim",
+   "objektnr_extern": "H-502",
+   "status": 1,
+   "verkauft": 0,
+   "reserviert": 0,
+   "vermarktungsstart": "2026-10-25"
+  }
+ },
+ {
+  "id": 503,
+  "type": "estate",
+  "elements": {
+   "objekttitel": "Penthouse Medienhafen",
+   "objektnr_extern": "W-503",
+   "status": 1,
+   "verkauft": 0,
+   "reserviert": 1,
+   "vermarktungsstart": "2026-07-01"
+  }
+ }
+]

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ titel }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+<div style="max-width:600px;margin:0 auto;padding:12px;">
+  <div style="background:#1e3a5f;color:#ffffff;border-radius:8px 8px 0 0;padding:14px 16px;">
+    <div style="font-size:12px;opacity:.8;">LebensWERT GmbH · Düsseldorf</div>
+    <div style="font-size:19px;font-weight:600;margin-top:2px;">{{ titel }}</div>
+  </div>
+  <div style="background:#ffffff;border-radius:0 0 8px 8px;padding:4px 16px 16px;">
+{% block inhalt %}{% endblock %}
+  </div>
+  <div style="font-size:11px;color:#6b7280;text-align:center;padding:10px 4px;">{{ fuss }}</div>
+</div>
+</body>
+</html>

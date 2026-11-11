@@ -1,0 +1,244 @@
+[
+ {
+  "id": 9001,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-06 10:00:00",
+   "Aktionsart": "Anfrage",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "101"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9002,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-07 12:00:00",
+   "Aktionsart": "Anfrage",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "102"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9003,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-08 09:00:00",
+   "Aktionsart": "Agreement bestätigt",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "102"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9004,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-02 08:00:00",
+   "Aktionsart": "Anfrage",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "103"
+   ],
+   "Objekt_nr": [
+    "502"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9005,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-06 15:00:00",
+   "Aktionsart": "Anfrage",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "104"
+   ],
+   "Objekt_nr": [
+    "502"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9006,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-20 11:00:00",
+   "Aktionsart": "MPE",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "201"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": "Eigentümerin möchte 2027 verkaufen, Erbengemeinschaft"
+  }
+ },
+ {
+  "id": 9007,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-01 11:00:00",
+   "Aktionsart": "MPE",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "202"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9008,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-16 11:00:00",
+   "Aktionsart": "Nachfass",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "202"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9009,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-20 14:00:00",
+   "Aktionsart": "Kaltakquise",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "301"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9010,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-22 14:00:00",
+   "Aktionsart": "Kaltakquise",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "302"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9011,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-25 14:00:00",
+   "Aktionsart": "Erstgespräch",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "302"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9012,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-30 14:00:00",
+   "Aktionsart": "Kaltakquise",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "303"
+   ],
+   "Objekt_nr": [],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9013,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-05 17:30:00",
+   "Aktionsart": "Besichtigung",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "102"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": "Sehr interessiert, Finanzierung klären"
+  }
+ },
+ {
+  "id": 9014,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-04 09:00:00",
+   "Aktionsart": "Exposéversand",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "101"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9015,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-11-03 10:00:00",
+   "Aktionsart": "Besichtigung",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "101"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ },
+ {
+  "id": 9016,
+  "type": "agentslog",
+  "elements": {
+   "Datum": "2026-10-28 10:00:00",
+   "Aktionsart": "Exposéversand",
+   "Aktionstyp": "",
+   "Adress_nr": [
+    "104"
+   ],
+   "Objekt_nr": [
+    "501"
+   ],
+   "Bemerkung": ""
+  }
+ }
+]
